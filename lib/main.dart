@@ -1,7 +1,8 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart'; // Your Firebase config file
-import 'auth/view/auth_view.dart'; // Import your new view
+import 'firebase_options.dart'; // Your generated Firebase options file
+import 'screens/login_screen.dart'; // Path to your login screen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,12 +18,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Flutter Firebase Auth',
+      title: 'KEC Faculty Portal',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.indigo,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: const AuthView(), // Set AuthView as the home screen
+      home: const LoginScreen(),
     );
   }
 }
