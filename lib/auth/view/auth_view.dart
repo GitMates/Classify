@@ -1,3 +1,6 @@
+// THIS IS THE CORRECTED LINE:
+import 'package:pooja/home/view/home_view.dart'; 
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../controller/auth_controller.dart';
@@ -49,15 +52,13 @@ class _AuthViewState extends State<AuthView> {
         await _authController.signUp(authModel);
       }
 
-      // Show success message if the widget is still in the tree.
+      // Navigate to the home screen if the widget is still in the tree.
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.green,
-          content: Text('${_isLoginMode ? 'Login' : 'Sign Up'} Successful!'),
-        ),
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => HomeView()),
+        (Route<dynamic> route) => false,
       );
-      // TODO: Navigate to the home screen on successful authentication.
+      
     } on FirebaseAuthException catch (e) {
       // Get a user-friendly error message from the controller.
       final errorMessage = _authController.getErrorMessage(e.code);
@@ -173,4 +174,3 @@ class _AuthViewState extends State<AuthView> {
     );
   }
 }
-
