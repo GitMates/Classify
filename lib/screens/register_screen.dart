@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+// Removed: import 'package:file_picker/file_picker.dart';
+// Removed: import 'package:firebase_storage/firebase_storage.dart';
 import 'waiting_screen.dart'; // Assuming this file exists for success navigation
 
 // --- Model for Teaching Assignment ---
@@ -41,7 +41,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
-  final _storage = FirebaseStorage.instance;
+  // Removed: final _storage = FirebaseStorage.instance;
   
   // Controllers for all fields
   final _firstNameController = TextEditingController();
@@ -54,9 +54,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // Dropdown State 
   List<TeachingAssignment> _assignments = [TeachingAssignment()]; // Start with one assignment
 
-  // File Upload State
-  PlatformFile? _signatureFile;
-  PlatformFile? _photoFile;
+  // Removed File Upload State
+  // Removed: PlatformFile? _signatureFile;
+  // Removed: PlatformFile? _photoFile;
   bool _isLoading = false;
 
   // Conditional data for dropdowns
@@ -84,47 +84,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
   }
 
-  // 🛠️ CORRECTED FUNCTION: Forces file bytes to be loaded
-  Future<void> _pickFile(bool isSignature) async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'], 
-      // 👇 THE FIX: Ensures file data (bytes) is loaded for Firebase Storage
-      withData: true, 
-      // 👆
-    );
-
-    if (result != null) {
-      if (result.files.single.size > 1024 * 1024) { // Check size > 1MB
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('File size must be less than 1MB.')),
-        );
-        return;
-      }
-      setState(() {
-        if (isSignature) {
-          _signatureFile = result.files.single;
-        } else {
-          _photoFile = result.files.single;
-        }
-      });
-    }
-  }
+  // Removed: _pickFile function
+  // Removed: _uploadFile function
   
-  // File upload function 
-  Future<String> _uploadFile(String uid, String fileType, PlatformFile file) async {
-    // This check is now less likely to fail thanks to `withData: true`
-    if (file.bytes == null) {
-      throw Exception('File data (bytes) not available for $fileType upload. Try a different file format.');
-    }
-    
-    // Use putData to upload the byte array directly
-    final ref = _storage.ref().child('faculty_data/$uid/$fileType.${file.extension}');
-    await ref.putData(file.bytes!); 
-    return await ref.getDownloadURL();
-  }
-  
-  // --- Main Submission Logic ---
+  // --- Main Submission Logic (Updated) ---
 
   Future<void> _registerFaculty() async {
     if (_formKey.currentState!.validate()) {
@@ -137,13 +100,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
       
-      if (_signatureFile == null || _photoFile == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please upload both signature and photo.')),
-        );
-        return;
-      }
-
+      // Removed: File upload validation
+      
       setState(() {
         _isLoading = true;
       });
@@ -157,14 +115,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         String uid = userCredential.user!.uid;
         String fullName = '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}';
 
-        // 2. Upload Files to Firebase Storage
-        final signatureUrl = await _uploadFile(uid, 'signature', _signatureFile!);
-        final photoUrl = await _uploadFile(uid, 'photo', _photoFile!);
+        // Removed: File upload to Firebase Storage (signatureUrl, photoUrl variables removed)
         
         // Prepare assignments for Firestore
         final assignmentsList = _assignments.map((a) => a.toMap()).toList();
         
-        // 3. Save User Data to Firestore
+        // 2. Save User Data to Firestore (Updated to use empty strings for URLs)
         await _firestore.collection('faculty').doc(uid).set({
           'uid': uid,
           'firstName': _firstNameController.text.trim(),
@@ -173,8 +129,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'email': _emailController.text.trim(),
           'phoneNo': _phoneController.text.trim(),
           'teachingAssignments': assignmentsList, 
-          'signatureUrl': signatureUrl,
-          'photoUrl': photoUrl,
+          'signatureUrl': '', // Using empty string as placeholder
+          'photoUrl': '',      // Using empty string as placeholder
           'registrationDate': FieldValue.serverTimestamp(),
           'status': 'Pending', 
         });
@@ -184,9 +140,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SnackBar(content: Text('Registration Successful! Redirecting for approval.')),
         );
 
+        // NEW code in register_screen.dart
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => WaitingScreen(facultyName: fullName),
+            // Pass the generated UID to the WaitingScreen
+            builder: (context) => WaitingScreen(
+              facultyName: fullName,
+              facultyUid: uid, // <-- Pass the UID here
+            ),
           ),
         );
 
@@ -196,7 +157,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           SnackBar(content: Text(message)),
         );
       } catch (e) {
-        // Catch all other errors including the custom file data error
+        // Catch all other errors 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('An unexpected error occurred: $e')),
         );
@@ -297,7 +258,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // --- Widget Build ---
+  // --- Widget Build (Updated) ---
 
   @override
   void dispose() {
@@ -417,39 +378,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   side: BorderSide(color: Colors.indigo.shade300),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 30), // Increased spacing after last section
 
-              // --- 4. File Uploads (Signature and Photo) ---
-              const Text('Document Upload (Max 1MB each - JPG, PNG, or PDF)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const Divider(),
+              // Removed: --- 4. File Uploads (Signature and Photo) ---
               
-              // Signature and Photo in a Row
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: ListTile(
-                      tileColor: _signatureFile != null ? Colors.green.shade50 : null,
-                      shape: RoundedRectangleBorder(side: BorderSide(color: _signatureFile != null ? Colors.green : Colors.grey), borderRadius: BorderRadius.circular(5)),
-                      title: Text(_signatureFile?.name ?? 'Upload Signature'),
-                      trailing: Icon(_signatureFile != null ? Icons.check_circle : Icons.upload_file),
-                      onTap: () => _pickFile(true),
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: ListTile(
-                      tileColor: _photoFile != null ? Colors.green.shade50 : null,
-                      shape: RoundedRectangleBorder(side: BorderSide(color: _photoFile != null ? Colors.green : Colors.grey), borderRadius: BorderRadius.circular(5)),
-                      title: Text(_photoFile?.name ?? 'Upload Photo'),
-                      trailing: Icon(_photoFile != null ? Icons.check_circle : Icons.add_a_photo),
-                      onTap: () => _pickFile(false),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 30),
-
               // --- Submit Button ---
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
