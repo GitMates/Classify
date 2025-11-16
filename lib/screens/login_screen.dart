@@ -7,7 +7,8 @@ import 'package:pooja/screens/admin_dashboad.dart';
 import 'register_screen.dart';
 import 'package:pooja/screens/profile_screen.dart';
 import 'package:pooja/screens/timetable_screen.dart';
-import 'waiting_screen.dart'; // Assuming you have this screen for pending status
+import 'package:pooja/screens/home_screen.dart'; // CHANGE 1: ADD HOME SCREEN IMPORT
+import 'waiting_screen.dart'; // For Pending status
 
 enum UserRole { faculty, admin }
 
@@ -23,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  UserRole _selectedRole = UserRole.faculty; // Default selection is Faculty
+  UserRole _selectedRole = UserRole.faculty; // Default: Faculty
   bool _isLoading = false;
 
   // Hardcoded Admin Credentials
@@ -52,11 +53,10 @@ class _LoginScreenState extends State<LoginScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Admin Login Successful!')),
           );
-          // Navigate to Admin Dashboard
+
           if (context.mounted) {
-            // FIX: Ensure AdminDashboard is the correct class name
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const AdminDashboard()), 
+              MaterialPageRoute(builder: (context) => const AdminDashboard()),
             );
           }
         } else {
@@ -65,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } else {
-        // --- FACULTY LOGIN LOGIC (Firebase & Status Check) ---
+        // --- FACULTY LOGIN LOGIC (Firebase + Status Check) ---
 
         // 1. Authenticate user
         UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -85,32 +85,33 @@ class _LoginScreenState extends State<LoginScreen> {
         final data = facultyDoc.data() as Map<String, dynamic>;
         final status = data['status'];
 
-        // Extract individual name fields safely
+        // Extract name fields safely
         final facultyFirstName = data['firstName'] as String? ?? '';
         final facultyMiddleName = data['middleName'] as String? ?? '';
         final facultyLastName = data['lastName'] as String? ?? '';
         final facultyEmail = data['email'] as String? ?? '';
         final facultyPhone = data['phoneNo'] as String? ?? '';
 
-        // Process teaching assignments (from map list to string list)
+        // Process teaching assignments
         final List<dynamic> teachingAssignmentsMap = data['teachingAssignments'] as List<dynamic>? ?? [];
         final List<String> assignments = teachingAssignmentsMap.map((assignmentMap) {
-            final aClass = assignmentMap['class'] ?? 'N/A';
-            final aDivision = assignmentMap['division'] ?? 'N/A';
-            final aSubject = assignmentMap['subject'] ?? 'N/A';
-            return '$aClass - $aDivision - $aSubject';
+          final aClass = assignmentMap['class'] ?? 'N/A';
+          final aDivision = assignmentMap['division'] ?? 'N/A';
+          final aSubject = assignmentMap['subject'] ?? 'N/A';
+          return '$aClass - $aDivision - $aSubject';
         }).toList();
 
-        // 3. Check status and navigate
+        // 3. Navigate based on status
         if (status == 'Approved') {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Faculty Login Successful!')),
           );
+
           if (context.mounted) {
-            // FIX: Correctly pass individual name parameters to ProfileScreen
+            // CHANGE 2: NAVIGATE TO HOME SCREEN
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
-                builder: (context) => ProfileScreen(
+                builder: (context) => HomeScreen(
                   firstName: facultyFirstName,
                   middleName: facultyMiddleName,
                   lastName: facultyLastName,
@@ -122,23 +123,21 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           }
         } else if (status == 'Pending') {
-          // If pending, navigate to WaitingScreen
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Approval is still pending. Please wait.')),
           );
+
           if (context.mounted) {
-            // FIX: Navigation to WaitingScreen
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => WaitingScreen(
                   facultyName: '$facultyFirstName $facultyLastName',
-                  facultyUid: uid, // Pass UID for potential status checks
+                  facultyUid: uid,
                 ),
               ),
             );
           }
         } else if (status == 'Rejected') {
-          // If rejected, log them out and show a message
           await FirebaseAuth.instance.signOut();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Account rejected by admin. Contact support.')),
@@ -173,7 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // --- Widget Build (Only the Registration Link needs fixing) ---
+  // --- UI Build ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -188,7 +187,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              // --- ICON/LOGO (Centered) ---
+              // --- Logo ---
               Center(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 10, bottom: 20),
@@ -199,8 +198,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              // --- Role Selection Radio Buttons ---
-              const Text('Select Role:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              // --- Role Selection ---
+              const Text(
+                'Select Role:',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
@@ -247,8 +249,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   if (!value.endsWith('@kongu.edu')) {
                     return 'Email must end with @kongu.edu';
                   }
-
-                  // Specific Admin Email validation (only for Admin role selection)
                   if (_selectedRole == UserRole.admin && !_adminCredentials.containsKey(value.trim())) {
                     return 'This email is not authorized for Admin login.';
                   }
@@ -276,6 +276,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
               const SizedBox(height: 30),
+
               // --- Login Button ---
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -292,18 +293,21 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
               const SizedBox(height: 20),
 
-              // --- Faculty Registration Link (Centered) ---
+              // --- Registration Link (Faculty only) ---
               if (_selectedRole == UserRole.faculty)
-                Center( 
+                Center(
                   child: TextButton(
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (context) => const RegisterScreen(), // FIX: Should navigate to RegisterScreen
+                          builder: (context) => const RegisterScreen(),
                         ),
                       );
                     },
-                    child: const Text('New Faculty? Register Here', style: TextStyle(color: Colors.indigo)),
+                    child: const Text(
+                      'New Faculty? Register Here',
+                      style: TextStyle(color: Colors.indigo),
+                    ),
                   ),
                 ),
             ],

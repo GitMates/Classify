@@ -1,23 +1,22 @@
-
 // lib/screens/profile_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'login_screen.dart'; // For navigating back to login/home
-import 'timetable_screen.dart'; // For navigating to the timetable
+import 'login_screen.dart'; // For navigating back to login
+import 'timetable_screen.dart'; // For future use if needed
 
 class ProfileScreen extends StatelessWidget {
   final String firstName;
-  final String middleName;
+  final String? middleName; // CHANGE 1: Made nullable
   final String lastName;
   final String email;
   final String phoneNo;
-  final List<String> assignments; // e.g., "II MCA - B - Python"
+  final List<String> assignments;
 
   const ProfileScreen({
     super.key,
     required this.firstName,
-    required this.middleName,
+    this.middleName, // CHANGE 2: Optional, not required
     required this.lastName,
     required this.email,
     required this.phoneNo,
@@ -35,9 +34,25 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
+  // Handle navigation to TimeTableScreen
+  void _navigateToTimetable(BuildContext context, String fullName) {
+    // Navigating to the TimeTableScreen.
+    // NOTE: We don't need to await the result here, as the Home Screen handles
+    // updating the schedule when the user returns.
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => TimeTableScreen(
+          facultyName: fullName,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final fullName = '$firstName${middleName.isNotEmpty ? ' $middleName' : ''} $lastName';
+    // Safely construct full name
+    final middle = (middleName != null && middleName!.isNotEmpty) ? ' $middleName' : '';
+    final fullName = '$firstName$middle $lastName';
     final displayFirstName = firstName;
 
     return Scaffold(
@@ -83,8 +98,9 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 10),
 
             _buildProfileDetail('First Name', firstName, Icons.badge),
-            if (middleName.isNotEmpty)
-              _buildProfileDetail('Middle Name', middleName, Icons.badge_outlined),
+            // CHANGE 3: Show middle name only if present
+            if (middleName != null && middleName!.isNotEmpty)
+              _buildProfileDetail('Middle Name', middleName!, Icons.badge_outlined),
             _buildProfileDetail('Last Name', lastName, Icons.badge),
             _buildProfileDetail('Email ID', email, Icons.email),
             _buildProfileDetail('Phone Number', phoneNo, Icons.phone),
@@ -116,46 +132,58 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
 
-      // bottomNavigationBar
+      // --- Bottom Navigation Bar (UPDATED) ---
       bottomNavigationBar: BottomAppBar(
         color: Colors.white,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: <Widget>[
-            // Home / Logout
-            IconButton(
-              icon: const Icon(Icons.home, color: Colors.indigo, size: 30),
-              onPressed: () => _logout(context),
-              tooltip: 'Home / Logout',
-            ),
-            // View Timetable
-            IconButton(
-              icon: const Icon(Icons.calendar_month, color: Colors.indigo, size: 30),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => TimeTableScreen(facultyName: fullName),
-                  ),
-                );
-              },
-              tooltip: 'View Timetable',
-            ),
-          ],
+        elevation: 8,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              // 1. Home / Back Button
+              IconButton(
+                icon: const Icon(Icons.home, color: Colors.indigo, size: 30),
+                onPressed: () => Navigator.of(context).pop(),
+                tooltip: 'Go Back to Home',
+              ),
+              
+              // 2. NEW: Timetable Button (Calendar/Table Icon)
+              IconButton(
+                icon: const Icon(Icons.table_chart, color: Colors.blueGrey, size: 30),
+                onPressed: () => _navigateToTimetable(context, fullName),
+                tooltip: 'View Timetable',
+              ),
+
+              // 3. Logout Button
+              IconButton(
+                icon: const Icon(Icons.logout, color: Colors.red, size: 30),
+                onPressed: () => _logout(context),
+                tooltip: 'Logout',
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // Helper: Profile detail row
+  // Helper: Build profile detail row
   Widget _buildProfileDetail(String title, String value, IconData icon) {
     return ListTile(
       leading: Icon(icon, color: Colors.indigo),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(value, style: const TextStyle(fontSize: 16)),
+      title: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        value,
+        style: const TextStyle(fontSize: 16),
+      ),
     );
   }
 
-  // Helper: Assignment card
+  // Helper: Build assignment card
   Widget _buildAssignmentTile({
     required String className,
     required String division,
@@ -164,6 +192,7 @@ class ProfileScreen extends StatelessWidget {
     return Card(
       elevation: 2,
       margin: const EdgeInsets.symmetric(vertical: 5),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
@@ -178,7 +207,10 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            Text('Class: $className | Division: $division'),
+            Text(
+              'Class: $className | Division: $division',
+              style: const TextStyle(fontSize: 14),
+            ),
           ],
         ),
       ),
