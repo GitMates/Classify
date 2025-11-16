@@ -1,13 +1,13 @@
-// lib/screens/login_screen.dart (UPDATED)
+// lib/screens/login_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pooja/screens/admin_dashboad.dart';
 import 'register_screen.dart';
-import 'package:pooja/screens/profile_screen.dart'; // NEW: ProfileScreen
+import 'package:pooja/screens/profile_screen.dart';
 import 'package:pooja/screens/timetable_screen.dart';
-import 'waiting_screen.dart'; // For Pending status
+import 'waiting_screen.dart'; // Assuming you have this screen for pending status
 
 enum UserRole { faculty, admin }
 
@@ -23,7 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  UserRole _selectedRole = UserRole.faculty; // Default: Faculty
+  UserRole _selectedRole = UserRole.faculty; // Default selection is Faculty
   bool _isLoading = false;
 
   // Hardcoded Admin Credentials
@@ -52,10 +52,11 @@ class _LoginScreenState extends State<LoginScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Admin Login Successful!')),
           );
-
+          // Navigate to Admin Dashboard
           if (context.mounted) {
+            // FIX: Ensure AdminDashboard is the correct class name
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const AdminDashboard()),
+              MaterialPageRoute(builder: (context) => const AdminDashboard()), 
             );
           }
         } else {
@@ -64,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } else {
-        // --- FACULTY LOGIN LOGIC (Firebase + Status Check) ---
+        // --- FACULTY LOGIN LOGIC (Firebase & Status Check) ---
 
         // 1. Authenticate user
         UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -84,29 +85,29 @@ class _LoginScreenState extends State<LoginScreen> {
         final data = facultyDoc.data() as Map<String, dynamic>;
         final status = data['status'];
 
-        // Extract name fields safely
+        // Extract individual name fields safely
         final facultyFirstName = data['firstName'] as String? ?? '';
         final facultyMiddleName = data['middleName'] as String? ?? '';
         final facultyLastName = data['lastName'] as String? ?? '';
         final facultyEmail = data['email'] as String? ?? '';
         final facultyPhone = data['phoneNo'] as String? ?? '';
 
-        // Process teaching assignments
+        // Process teaching assignments (from map list to string list)
         final List<dynamic> teachingAssignmentsMap = data['teachingAssignments'] as List<dynamic>? ?? [];
         final List<String> assignments = teachingAssignmentsMap.map((assignmentMap) {
-          final aClass = assignmentMap['class'] ?? 'N/A';
-          final aDivision = assignmentMap['division'] ?? 'N/A';
-          final aSubject = assignmentMap['subject'] ?? 'N/A';
-          return '$aClass - $aDivision - $aSubject';
+            final aClass = assignmentMap['class'] ?? 'N/A';
+            final aDivision = assignmentMap['division'] ?? 'N/A';
+            final aSubject = assignmentMap['subject'] ?? 'N/A';
+            return '$aClass - $aDivision - $aSubject';
         }).toList();
 
-        // 3. Navigate based on status
+        // 3. Check status and navigate
         if (status == 'Approved') {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Faculty Login Successful!')),
           );
-
           if (context.mounted) {
+            // FIX: Correctly pass individual name parameters to ProfileScreen
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => ProfileScreen(
@@ -121,21 +122,23 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           }
         } else if (status == 'Pending') {
+          // If pending, navigate to WaitingScreen
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Approval is still pending. Please wait.')),
           );
-
           if (context.mounted) {
+            // FIX: Navigation to WaitingScreen
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => WaitingScreen(
                   facultyName: '$facultyFirstName $facultyLastName',
-                  facultyUid: uid,
+                  facultyUid: uid, // Pass UID for potential status checks
                 ),
               ),
             );
           }
         } else if (status == 'Rejected') {
+          // If rejected, log them out and show a message
           await FirebaseAuth.instance.signOut();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Account rejected by admin. Contact support.')),
@@ -170,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // --- UI Build ---
+  // --- Widget Build (Only the Registration Link needs fixing) ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -185,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              // --- Logo ---
+              // --- ICON/LOGO (Centered) ---
               Center(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 10, bottom: 20),
@@ -196,11 +199,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              // --- Role Selection ---
-              const Text(
-                'Select Role:',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
+              // --- Role Selection Radio Buttons ---
+              const Text('Select Role:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
@@ -247,6 +247,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   if (!value.endsWith('@kongu.edu')) {
                     return 'Email must end with @kongu.edu';
                   }
+
+                  // Specific Admin Email validation (only for Admin role selection)
                   if (_selectedRole == UserRole.admin && !_adminCredentials.containsKey(value.trim())) {
                     return 'This email is not authorized for Admin login.';
                   }
@@ -274,7 +276,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
               const SizedBox(height: 30),
-
               // --- Login Button ---
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -291,21 +292,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
               const SizedBox(height: 20),
 
-              // --- Registration Link (Only for Faculty) ---
+              // --- Faculty Registration Link (Centered) ---
               if (_selectedRole == UserRole.faculty)
-                Center(
+                Center( 
                   child: TextButton(
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (context) => const RegisterScreen(),
+                          builder: (context) => const RegisterScreen(), // FIX: Should navigate to RegisterScreen
                         ),
                       );
                     },
-                    child: const Text(
-                      'New Faculty? Register Here',
-                      style: TextStyle(color: Colors.indigo),
-                    ),
+                    child: const Text('New Faculty? Register Here', style: TextStyle(color: Colors.indigo)),
                   ),
                 ),
             ],

@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+// Removed: import 'package:file_picker/file_picker.dart';
+// Removed: import 'package:firebase_storage/firebase_storage.dart';
 import 'waiting_screen.dart'; // Assuming this file exists for success navigation
 
 // --- Model for Teaching Assignment ---
@@ -29,7 +31,7 @@ class TeachingAssignment {
 // ----------------------------------------
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  const RegisterScreen({super.key}); 
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -39,7 +41,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
-
+  // Removed: final _storage = FirebaseStorage.instance;
+  
   // Controllers for all fields
   final _firstNameController = TextEditingController();
   final _middleNameController = TextEditingController();
@@ -48,9 +51,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  // Dropdown State
+  // Dropdown State 
   List<TeachingAssignment> _assignments = [TeachingAssignment()]; // Start with one assignment
 
+  // Removed File Upload State
+  // Removed: PlatformFile? _signatureFile;
+  // Removed: PlatformFile? _photoFile;
   bool _isLoading = false;
 
   // Conditional data for dropdowns
@@ -78,10 +84,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
   }
 
+  // Removed: _pickFile function
+  // Removed: _uploadFile function
+  
   // --- Main Submission Logic (Updated) ---
 
   Future<void> _registerFaculty() async {
     if (_formKey.currentState!.validate()) {
+      
       // Validation for assignments list
       if (_assignments.isEmpty || !_assignments.every((a) => a.isValid)) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -89,7 +99,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
         return;
       }
-
+      
+      // Removed: File upload validation
+      
       setState(() {
         _isLoading = true;
       });
@@ -101,52 +113,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
           password: _passwordController.text.trim(),
         );
         String uid = userCredential.user!.uid;
+        String fullName = '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}';
 
-        // Construct full name including middle name if present
-        String firstName = _firstNameController.text.trim();
-        String middleName = _middleNameController.text.trim();
-        String lastName = _lastNameController.text.trim();
-
-        // Construct the full name: FirstName MiddleName LastName (or FirstName LastName)
-        String fullName = '$firstName${middleName.isNotEmpty ? ' $middleName' : ''} $lastName';
-
+        // Removed: File upload to Firebase Storage (signatureUrl, photoUrl variables removed)
+        
         // Prepare assignments for Firestore
         final assignmentsList = _assignments.map((a) => a.toMap()).toList();
-
-        // 2. Save User Data to Firestore
+        
+        // 2. Save User Data to Firestore (Updated to use empty strings for URLs)
         await _firestore.collection('faculty').doc(uid).set({
           'uid': uid,
-          'firstName': firstName,
-          'middleName': middleName,
-          'lastName': lastName,
+          'firstName': _firstNameController.text.trim(),
+          'middleName': _middleNameController.text.trim(),
+          'lastName': _lastNameController.text.trim(),
           'email': _emailController.text.trim(),
           'phoneNo': _phoneController.text.trim(),
-          'teachingAssignments': assignmentsList,
+          'teachingAssignments': assignmentsList, 
           'signatureUrl': '', // Using empty string as placeholder
-          'photoUrl': '',     // Using empty string as placeholder
+          'photoUrl': '',      // Using empty string as placeholder
           'registrationDate': FieldValue.serverTimestamp(),
-          'status': 'Pending',
+          'status': 'Pending', 
         });
 
-        // Success: Show message and navigate
+        // Success: Navigate to the Waiting Screen
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Registration Successful! Redirecting for approval.')),
         );
 
+        // NEW code in register_screen.dart
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
+            // Pass the generated UID to the WaitingScreen
             builder: (context) => WaitingScreen(
               facultyName: fullName,
-              facultyUid: uid,
+              facultyUid: uid, // <-- Pass the UID here
             ),
           ),
         );
+
       } on FirebaseAuthException catch (e) {
         String message = 'Registration failed. ${e.message}';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(message)),
         );
       } catch (e) {
+        // Catch all other errors 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('An unexpected error occurred: $e')),
         );
@@ -173,10 +184,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Assignment ${index + 1}',
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo),
-              ),
+              Text('Assignment ${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
               // Remove button (only if more than one assignment exists)
               if (_assignments.length > 1)
                 IconButton(
@@ -193,19 +201,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(
-                    labelText: 'Select Class',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: 'Select Class', border: OutlineInputBorder()),
                   value: assignment.selectedClass,
-                  items: _classOptions
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                      .toList(),
+                  items: _classOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                   onChanged: (String? newValue) {
                     setState(() {
                       assignment.selectedClass = newValue;
-                      assignment.selectedDivision = null;
-                      assignment.selectedSubject = null;
+                      assignment.selectedDivision = null; // Reset division when class changes
+                      assignment.selectedSubject = null; // Reset subject when class changes
                     });
                   },
                   validator: (value) => value == null ? 'Select a class' : null,
@@ -214,13 +217,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(
-                    labelText: 'Select Division',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: 'Select Division', border: OutlineInputBorder()),
                   value: assignment.selectedDivision,
-                  items: assignment.selectedClass != null &&
-                          _divisionOptions.containsKey(assignment.selectedClass!)
+                  items: assignment.selectedClass != null && _divisionOptions.containsKey(assignment.selectedClass!)
                       ? _divisionOptions[assignment.selectedClass!]!
                           .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                           .toList()
@@ -240,13 +239,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           // Subject Dropdown (Conditional - Full Width)
           if (assignment.selectedClass != null)
             DropdownButtonFormField<String>(
-              decoration: const InputDecoration(
-                labelText: 'Select Subject',
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: 'Select Subject', border: OutlineInputBorder()),
               value: assignment.selectedSubject,
-              items: assignment.selectedClass != null &&
-                      _subjectOptions.containsKey(assignment.selectedClass!)
+              items: assignment.selectedClass != null && _subjectOptions.containsKey(assignment.selectedClass!)
                   ? _subjectOptions[assignment.selectedClass!]!
                       .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                       .toList()
@@ -263,7 +258,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // --- Lifecycle & Build ---
+  // --- Widget Build (Updated) ---
 
   @override
   void dispose() {
@@ -282,7 +277,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(
         title: const Text('Faculty Registration'),
         backgroundColor: Colors.indigo,
-        automaticallyImplyLeading: true,
+        automaticallyImplyLeading: true, // Show back button
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
@@ -292,36 +287,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               // --- 1. Personal Details ---
-              const Text(
-                'Personal Details',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
+              const Text('Personal Details', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const Divider(),
-
+              
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: TextFormField(
                       controller: _firstNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'First Name',
-                        prefixIcon: Icon(Icons.person),
-                      ),
-                      validator: (value) =>
-                          value == null || value.isEmpty ? 'Enter first name' : null,
+                      decoration: const InputDecoration(labelText: 'First Name', prefixIcon: Icon(Icons.person)),
+                      validator: (value) => value == null || value.isEmpty ? 'Enter first name' : null,
                     ),
                   ),
-                  const SizedBox(width: 15),
+                  const SizedBox(width: 15), 
                   Expanded(
                     child: TextFormField(
                       controller: _lastNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Last Name',
-                        prefixIcon: Icon(Icons.person),
-                      ),
-                      validator: (value) =>
-                          value == null || value.isEmpty ? 'Enter last name' : null,
+                      decoration: const InputDecoration(labelText: 'Last Name', prefixIcon: Icon(Icons.person)),
+                      validator: (value) => value == null || value.isEmpty ? 'Enter last name' : null,
                     ),
                   ),
                 ],
@@ -329,33 +313,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 10),
               TextFormField(
                 controller: _middleNameController,
-                decoration: const InputDecoration(
-                  labelText: 'Middle Name (Optional)',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
+                decoration: const InputDecoration(labelText: 'Middle Name (Optional)', prefixIcon: Icon(Icons.person_outline)),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 20), 
 
               // --- 2. Contact & Auth Details ---
-              const Text(
-                'Contact & Authentication',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
+              const Text('Contact & Authentication', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const Divider(),
-
+              
               // Email Field
               TextFormField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'College Email ID (@kongu.edu)',
-                  prefixIcon: Icon(Icons.email),
-                ),
+                decoration: const InputDecoration(labelText: 'College Email ID (@kongu.edu)', prefixIcon: Icon(Icons.email)),
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Enter email address';
-                  if (!value.endsWith('@kongu.edu')) {
-                    return 'Email must end with @kongu.edu';
-                  }
+                  if (!value.endsWith('@kongu.edu')) return 'Email must end with @kongu.edu';
                   return null;
                 },
               ),
@@ -365,12 +338,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextFormField(
                 controller: _passwordController,
                 obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Set Password (Min 6 chars)',
-                  prefixIcon: Icon(Icons.lock),
-                ),
-                validator: (value) =>
-                    value == null || value.length < 6 ? 'Password must be at least 6 characters' : null,
+                decoration: const InputDecoration(labelText: 'Set Password (Min 6 chars)', prefixIcon: Icon(Icons.lock)),
+                validator: (value) => value == null || value.length < 6 ? 'Password must be at least 6 characters' : null,
               ),
               const SizedBox(height: 10),
 
@@ -378,35 +347,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextFormField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Phone No (10 digits)',
-                  prefixIcon: Icon(Icons.phone),
-                ),
+                decoration: const InputDecoration(labelText: 'Phone No (10 digits)', prefixIcon: Icon(Icons.phone)),
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Enter phone number';
-                  if (value.length != 10 || int.tryParse(value) == null) {
-                    return 'Phone number must be exactly 10 digits';
-                  }
+                  if (value.length != 10 || int.tryParse(value) == null) return 'Phone number must be exactly 10 digits';
                   return null;
                 },
               ),
               const SizedBox(height: 20),
-
-              // --- 3. Teaching Assignments ---
-              const Text(
-                'Teaching Assignments',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
+              
+              // --- 3. Teaching Assignments (Class, Division, Subject) ---
+              const Text('Teaching Assignments', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const Divider(),
 
-              // Dynamically build assignment dropdowns
+              // Dynamically build the list of assignment dropdowns
               ..._assignments.asMap().entries.map((entry) {
                 int idx = entry.key;
                 TeachingAssignment assignment = entry.value;
                 return _buildAssignmentDropdowns(idx, assignment);
               }).toList(),
-
-              // Add Assignment Button
+              
+              // ADD Assignment Button
               OutlinedButton.icon(
                 icon: const Icon(Icons.add),
                 label: const Text('Add Another Assignment'),
@@ -417,8 +378,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   side: BorderSide(color: Colors.indigo.shade300),
                 ),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 30), // Increased spacing after last section
 
+              // Removed: --- 4. File Uploads (Signature and Photo) ---
+              
               // --- Submit Button ---
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
