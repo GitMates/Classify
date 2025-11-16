@@ -1,10 +1,9 @@
-// lib/screens/admin_dashboad.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart'; // To navigate back to the login screen
 import 'package:url_launcher/url_launcher.dart'; // To launch the document URLs
+import 'timetable_screen.dart'; // Import the TimetableScreen
 
 class AdminDashboard extends StatelessWidget {
   // Ensure const constructor is present
@@ -17,6 +16,21 @@ class AdminDashboard extends StatelessWidget {
         title: const Text('Admin Dashboard 🧑‍💻'),
         backgroundColor: Colors.red.shade700,
         actions: [
+          // --- NEW: Timetable Navigation Button ---
+          IconButton(
+            icon: const Icon(Icons.calendar_month),
+            onPressed: () {
+              // Navigate to the TimetableScreen. 
+              // We pass 'Admin' as the facultyName as a placeholder for the admin view.
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const TimeTableScreen(facultyName: 'Admin'),
+                ),
+              );
+            },
+            tooltip: 'View Timetable',
+          ),
+          // --- Existing Logout Button ---
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
