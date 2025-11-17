@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pooja/screens/profile_screen.dart';
 import 'package:pooja/screens/timetable_screen.dart';
+import 'package:pooja/screens/login_screen.dart'; // Import LoginScreen for navigation
 
 // --- 0. DATA MODEL: Define the Assignment model ---
 class Assignment {
@@ -53,7 +54,7 @@ class VerticalTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // --- Display the "No Timetable" state if assignments is empty ---
+    // Show empty state message if no assignments exist
     if (assignments.isEmpty) {
       return Center(
         child: Column(
@@ -227,8 +228,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
-  // Initialize with an empty list so the "No Timetable Approved" message shows initially
+  // 0: Timetable View, 1: Profile View
+  int _selectedIndex = 0; 
   List<Assignment> _submittedSchedule = [];
   String _totalHours = '0 hours 0 minutes';
 
@@ -237,24 +238,30 @@ class _HomeScreenState extends State<HomeScreen> {
     return '${widget.firstName} $middle${widget.lastName}';
   }
 
-  // Use late to initialize later, but keep it a List<Widget>
   late List<Widget> _widgetOptions;
 
   @override
   void initState() {
     super.initState();
-    
-    // REMOVED HARDCODED SCHEDULE TO SHOW EMPTY STATE INITIALLY
-    // _submittedSchedule = [ ... ];
-
     _calculateTotalHours(_submittedSchedule);
     _initializeWidgetOptions();
+  }
+
+  // NEW: Function to navigate back to the LoginScreen (acting as a logout/exit)
+  void _navigateToLogin() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (Route<dynamic> route) => false, // Remove all previous routes from the stack
+    );
   }
 
   void _initializeWidgetOptions() {
     // Re-initialize widget options using the current state variables
     _widgetOptions = <Widget>[
+      // Index 0: Home Content (Timetable)
       VerticalTimeline(assignments: _submittedSchedule, totalHours: _totalHours),
+      
+      // Index 1: Profile Screen Content
       ProfileScreen(
         firstName: widget.firstName,
         middleName: widget.middleName,
@@ -262,6 +269,10 @@ class _HomeScreenState extends State<HomeScreen> {
         email: widget.email,
         phoneNo: widget.phoneNo,
         assignments: widget.assignments,
+        // Pass the callback to ProfileScreen to allow it to switch back to the Home tab (index 0)
+        onNavigateHome: () => _onItemTapped(0), 
+        // The onLogout callback now calls the function to navigate back to LoginScreen
+        onLogout: _navigateToLogin, 
       ),
     ];
   }
@@ -279,10 +290,11 @@ class _HomeScreenState extends State<HomeScreen> {
     int hours = totalMinutes ~/ 60;
     int minutes = totalMinutes % 60;
 
-    // Use setState only if the widget is mounted
     if (mounted) {
       setState(() {
         _totalHours = '$hours hours $minutes minutes';
+        // Re-initialize widget options to update VerticalTimeline with new _totalHours
+        _initializeWidgetOptions();
       });
     } else {
       _totalHours = '$hours hours $minutes minutes';
@@ -304,8 +316,8 @@ class _HomeScreenState extends State<HomeScreen> {
       // Update state, calculate hours, and re-initialize widget options
       setState(() {
         _submittedSchedule = newSchedule;
-        _calculateTotalHours(_submittedSchedule); // This call includes setState internally
-        _initializeWidgetOptions(); 
+        // _calculateTotalHours will call setState and _initializeWidgetOptions internally
+        _calculateTotalHours(_submittedSchedule);
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -314,22 +326,32 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Method to handle switching tabs for internal navigation (e.g., Profile)
   void _onItemTapped(int index) {
-    // This is the correct standard way for BottomNavigationBar
-    // It updates the selected index and the body rebuilds to show the corresponding widget from _widgetOptions
     setState(() {
       _selectedIndex = index;
-      // No need to call _initializeWidgetOptions() here unless the Profile screen needs dynamic updates based on _submittedSchedule,
-      // but it's fine to keep it simple as we are updating _submittedSchedule in _navigateToTimetable()
     });
   }
-
-
-  void _onBellIconTapped() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-            'Showing current schedule reminders for ${_submittedSchedule.length} periods, totaling $_totalHours.'),
+  
+  // Helper widget for the custom bottom navigation items
+  Widget _buildBottomNavItem({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final color = isSelected ? Colors.indigo : Colors.grey.shade600;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 26),
+            Text(label, style: TextStyle(color: color, fontSize: 12)),
+          ],
+        ),
       ),
     );
   }
@@ -338,48 +360,66 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('$_fullName - Faculty Portal'),
+        title: Text('Welcome, ${widget.firstName}'),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
-        actions: [
+        // Left corner icon: Search
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 8.0),
+          child: Icon(Icons.search, color: Colors.white, size: 28),
+        ),
+        actions: const [
+          // Right corner icon: Bell/Notification
           IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Search feature is not yet implemented.')),
-              );
-            },
-            tooltip: 'Search',
-          ),
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            onPressed: _onBellIconTapped,
+            icon: Icon(Icons.notifications),
+            onPressed: null, // Placeholder action
             tooltip: 'Notifications',
           ),
         ],
       ),
-      // Display the widget corresponding to the selected index
-      body: Center(child: _widgetOptions.elementAt(_selectedIndex)), 
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _navigateToTimetable,
-        label: const Text('Edit Timetable'),
-        icon: const Icon(Icons.edit_calendar),
-        backgroundColor: Colors.indigo.shade600,
-        foregroundColor: Colors.white,
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.indigo.shade700,
-        unselectedItemColor: Colors.grey,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
+      
+      // Displays the selected widget from _widgetOptions list
+      body: Center(
+        child: _widgetOptions.elementAt(_selectedIndex),  
       ),
       
+      // FloatingActionButton is removed as per the new bottom nav structure
+      floatingActionButton: null,
+      
+      // Custom Bottom Bar (Timetable, Home, Profile)
+      bottomNavigationBar: BottomAppBar(
+        color: Colors.white,
+        elevation: 8,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: <Widget>[
+            // 1. Timetable Icon (Left) - External Navigation
+            _buildBottomNavItem(
+              icon: Icons.calendar_month, // Using a clear calendar icon
+              label: 'Timetable',
+              isSelected: false, // Not part of the internal selection
+              onTap: _navigateToTimetable,
+            ),
+            
+            // 2. Home Icon (Center) - External Navigation to Login/Exit
+            _buildBottomNavItem(
+              icon: Icons.home,
+              label: 'Home/Exit',
+              // Highlight the Home icon if currently on the Home content tab
+              isSelected: _selectedIndex == 0,
+              onTap: _navigateToLogin, // Navigates to LoginScreen as requested
+            ),
+            
+            // 3. Profile Icon (Right) - Internal Navigation
+            _buildBottomNavItem(
+              icon: Icons.person,
+              label: 'Profile',
+              isSelected: _selectedIndex == 1,
+              onTap: () => _onItemTapped(1), // Switches to the Profile content tab
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

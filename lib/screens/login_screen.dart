@@ -6,9 +6,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pooja/screens/admin_dashboad.dart';
 import 'register_screen.dart';
 import 'package:pooja/screens/profile_screen.dart';
-import 'package:pooja/screens/timetable_screen.dart';
+import 'package:pooja/screens/timetable_screen.dart' hide HomeScreen;
 import 'package:pooja/screens/home_screen.dart'; // CHANGE 1: ADD HOME SCREEN IMPORT
 import 'waiting_screen.dart'; // For Pending status
+import 'notes_screen.dart';
 
 enum UserRole { faculty, admin }
 
