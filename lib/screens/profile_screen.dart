@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'login_screen.dart';
+import 'login_screen.dart'; // Import for navigation target
 import 'notes_screen.dart';
 import 'home_screen.dart';
 
@@ -11,8 +11,8 @@ class ProfileScreen extends StatelessWidget {
   final String email;
   final String phoneNo;
   final List<dynamic> assignments;
-  final VoidCallback onNavigateHome;
-  final VoidCallback onLogout;
+  // The onNavigateHome and onLogout properties have been removed 
+  // because the logout logic is now handled internally.
 
   const ProfileScreen({
     super.key,
@@ -22,9 +22,39 @@ class ProfileScreen extends StatelessWidget {
     required this.email,
     required this.phoneNo,
     required this.assignments,
-    required this.onNavigateHome,
-    required this.onLogout,
+    // Removed: required this.onNavigateHome,
+    // Removed: required this.onLogout,
   });
+
+  // --- NEW: Local method to handle Firebase sign out and navigation ---
+  Future<void> _logout(BuildContext context) async {
+    // 1. Show a loading indicator (optional, but good practice for async ops)
+    // You might want to use a stateful widget to manage a real loading state,
+    // but we proceed directly here for simplicity in a StatelessWidget.
+    
+    try {
+      // 2. Sign out the current user from Firebase
+      await FirebaseAuth.instance.signOut();
+      
+      // 3. Navigate to LoginScreen and clear all previous routes
+      if (context.mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (context) => const LoginScreen(),
+          ),
+          // This predicate (route) => false ensures no routes remain on the stack.
+          (Route<dynamic> route) => false, 
+        );
+      }
+    } catch (e) {
+      // Handle potential sign-out error
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error signing out. Try again: $e')),
+        );
+      }
+    }
+  }
 
   void _navigateToNotes(BuildContext context) {
     Navigator.of(context).push(
@@ -163,6 +193,7 @@ class ProfileScreen extends StatelessWidget {
                     subject: assignment['subject'] ?? 'N/A',
                   );
                 } else {
+                  // Fallback for non-Map assignments
                   final parts = assignment.toString().split(' - ');
                   return _buildAssignmentTile(
                     className: parts.isNotEmpty ? parts[0] : 'N/A',
@@ -179,7 +210,8 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.logout, size: 40, color: Colors.red),
-                    onPressed: onLogout,
+                    // Set the onPressed to call the local asynchronous _logout method
+                    onPressed: () => _logout(context), 
                     tooltip: 'Logout',
                   ),
                   const Text(

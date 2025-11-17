@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pooja/screens/profile_screen.dart';
 import 'package:pooja/screens/timetable_screen.dart';
-import 'package:pooja/screens/login_screen.dart'; // Import LoginScreen for navigation
+// REMOVED: import 'package:pooja/screens/login_screen.dart'; 
 
 // --- 0. DATA MODEL: Define the Assignment model ---
 class Assignment {
@@ -151,8 +151,8 @@ class VerticalTimeline extends StatelessWidget {
                     isLast
                         ? const SizedBox(height: 10)
                         : Expanded(
-                            child: Container(width: 2, color: Colors.grey.shade400),
-                          ),
+                              child: Container(width: 2, color: Colors.grey.shade400),
+                            ),
                   ],
                 ),
               ),
@@ -247,13 +247,14 @@ class _HomeScreenState extends State<HomeScreen> {
     _initializeWidgetOptions();
   }
 
-  // NEW: Function to navigate back to the LoginScreen (acting as a logout/exit)
-  void _navigateToLogin() {
+  // REMOVED: _navigateToLogin function (The logic is now in ProfileScreen)
+  /* void _navigateToLogin() {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const LoginScreen()),
-      (Route<dynamic> route) => false, // Remove all previous routes from the stack
+      (Route<dynamic> route) => false, 
     );
   }
+  */
 
   void _initializeWidgetOptions() {
     // Re-initialize widget options using the current state variables
@@ -269,10 +270,8 @@ class _HomeScreenState extends State<HomeScreen> {
         email: widget.email,
         phoneNo: widget.phoneNo,
         assignments: widget.assignments,
-        // Pass the callback to ProfileScreen to allow it to switch back to the Home tab (index 0)
-        onNavigateHome: () => _onItemTapped(0), 
-        // The onLogout callback now calls the function to navigate back to LoginScreen
-        onLogout: _navigateToLogin, 
+        // REMOVED: onNavigateHome: () => _onItemTapped(0), 
+        // REMOVED: onLogout: _navigateToLogin, 
       ),
     ];
   }
@@ -380,7 +379,7 @@ class _HomeScreenState extends State<HomeScreen> {
       
       // Displays the selected widget from _widgetOptions list
       body: Center(
-        child: _widgetOptions.elementAt(_selectedIndex),  
+        child: _widgetOptions.elementAt(_selectedIndex), 
       ),
       
       // FloatingActionButton is removed as per the new bottom nav structure
@@ -401,13 +400,14 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: _navigateToTimetable,
             ),
             
-            // 2. Home Icon (Center) - External Navigation to Login/Exit
+            // 2. Home Icon (Center) - Internal Navigation
             _buildBottomNavItem(
               icon: Icons.home,
-              label: 'Home/Exit',
+              label: 'Home', 
               // Highlight the Home icon if currently on the Home content tab
               isSelected: _selectedIndex == 0,
-              onTap: _navigateToLogin, // Navigates to LoginScreen as requested
+              // Switches to the Home view internally
+              onTap: () => _onItemTapped(0), 
             ),
             
             // 3. Profile Icon (Right) - Internal Navigation
