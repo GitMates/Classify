@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+// --- NEW IMPORTS FOR FIREBASE, INT'L, AND UTILITIES ---
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart'; // For kDebugMode print statements
+// -----------------------------------------------------
+
 import 'package:pooja/screens/profile_screen.dart';
 import 'package:pooja/screens/timetable_screen.dart';
-// REMOVED: import 'package:pooja/screens/login_screen.dart'; 
+
 
 // --- 0. DATA MODEL: Define the Assignment model ---
 class Assignment {
@@ -26,14 +33,14 @@ List<Assignment> parseScheduleMap(Map<String, List<Map<String, String>>> schedul
 
   scheduleMap.forEach((day, periods) {
     periods.forEach((period) {
-      String facultyCode = period['faculty'] ?? '';
-      String section = period['section'] ?? 'I MCA';
+      // Use 'section' from the period map if available, otherwise default to 'I MCA'
+      String section = period['section'] ?? 'I MCA'; 
 
       assignments.add(Assignment(
         day: day,
         time: period['time'] ?? 'N/A',
         subject: period['subject'] ?? 'N/A',
-        facultyCode: facultyCode,
+        facultyCode: period['faculty'] ?? '',
         section: section,
       ));
     });
@@ -41,314 +48,367 @@ List<Assignment> parseScheduleMap(Map<String, List<Map<String, String>>> schedul
   return assignments;
 }
 
-// --- 2. WIDGET: VerticalTimeline to display the schedule ---
-class VerticalTimeline extends StatelessWidget {
-  final List<Assignment> assignments;
-  final String totalHours;
-
-  const VerticalTimeline({
-    super.key,
-    required this.assignments,
-    required this.totalHours,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Show empty state message if no assignments exist
-    if (assignments.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.warning_amber, size: 50, color: Colors.indigo.shade400),
-            const SizedBox(height: 10),
-            const Text(
-              'No Timetable Approved Yet.',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
-            ),
-            const SizedBox(height: 5),
-            const Text(
-              'Tap the Edit button to submit your schedule.',
-              style: TextStyle(fontSize: 14, color: Colors.black54),
-            ),
-          ],
-        ),
-      );
-    }
-    // -----------------------------------------------------------------
-
-    final Map<String, List<Assignment>> assignmentsByDay = {};
-    for (var assignment in assignments) {
-      assignmentsByDay.putIfAbsent(assignment.day, () => []).add(assignment);
-    }
-
-    final List<String> sortedDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-        .where((day) => assignmentsByDay.containsKey(day))
-        .toList();
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Approved Weekly Schedule',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.indigo.shade800),
-          ),
-          Text(
-            'Total Teaching Load: $totalHours',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.green.shade700),
-          ),
-          const Divider(thickness: 2),
-          ...sortedDays.map((day) {
-            final dailyAssignments = assignmentsByDay[day]!;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 15.0, bottom: 8.0),
-                  child: Text(
-                    '${day.toUpperCase()}',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.indigo.shade600),
-                  ),
-                ),
-                _buildDailyTimeline(dailyAssignments),
-              ],
-            );
-          }).toList(),
-          const SizedBox(height: 80),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDailyTimeline(List<Assignment> dailyAssignments) {
-    return ListView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      shrinkWrap: true,
-      itemCount: dailyAssignments.length,
-      itemBuilder: (context, index) {
-        final assignment = dailyAssignments[index];
-        final isLast = index == dailyAssignments.length - 1;
-
-        return IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: 25,
-                child: Column(
-                  children: [
-                    Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: Colors.indigo,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.indigo.shade100, width: 2),
-                      ),
-                    ),
-                    isLast
-                        ? const SizedBox(height: 10)
-                        : Expanded(
-                              child: Container(width: 2, color: Colors.grey.shade400),
-                            ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 15.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        // Display subject and time clearly
-                        '${assignment.subject} (${assignment.time})',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87),
-                      ),
-                      Text(
-                        'Section: ${assignment.section} | Faculty Code: ${assignment.facultyCode}',
-                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                      ),
-                      const SizedBox(height: 5),
-                      // NOTE: Placeholder bullet points are currently hardcoded
-                      _buildBulletPoint('Home work (e.g., set theory problems)'),
-                      _buildBulletPoint('Project (e.g., database design review)'),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBulletPoint(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 8.0, top: 2.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('•', style: TextStyle(fontSize: 16, color: Colors.green)),
-          const SizedBox(width: 5),
-          Expanded(
-            child: Text(text, style: const TextStyle(fontSize: 14, color: Colors.black54)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// --- 3. HomeScreen StatefulWidget ---
+// --- 2. HomeScreen Widget ---
 class HomeScreen extends StatefulWidget {
-  final String firstName;
-  final String? middleName;
-  final String lastName;
-  final String email;
-  final String phoneNo;
-  final List<String> assignments;
+  // NEW: Accept facultyName for personalized greeting/header
+  final String facultyName; 
 
-  const HomeScreen({
-    super.key,
-    required this.firstName,
-    this.middleName,
-    required this.lastName,
-    required this.email,
-    required this.phoneNo,
-    required this.assignments,
-  });
+  const HomeScreen({super.key, required this.facultyName});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // 0: Timetable View, 1: Profile View
-  int _selectedIndex = 0; 
-  List<Assignment> _submittedSchedule = [];
-  String _totalHours = '0 hours 0 minutes';
+  int _selectedIndex = 0; // 0 for Home (Timetable), 1 for Profile
 
-  String get _fullName {
-    final middle = widget.middleName != null && widget.middleName!.isNotEmpty ? '${widget.middleName} ' : '';
-    return '${widget.firstName} $middle${widget.lastName}';
-  }
-
-  late List<Widget> _widgetOptions;
+  // New state variables for timetable display
+  List<Assignment> _currentDaySchedule = [];
+  bool _isLoading = true;
+  String _currentDayName = '';
+  String _errorMessage = '';
 
   @override
   void initState() {
     super.initState();
-    _calculateTotalHours(_submittedSchedule);
-    _initializeWidgetOptions();
+    // Get the current day abbreviation (Mon, Tue, Wed, etc.)
+    _currentDayName = _getCurrentDayAbbreviation(); 
+    _fetchTimetable();
   }
 
-  // REMOVED: _navigateToLogin function (The logic is now in ProfileScreen)
-  /* void _navigateToLogin() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-      (Route<dynamic> route) => false, 
-    );
-  }
-  */
-
-  void _initializeWidgetOptions() {
-    // Re-initialize widget options using the current state variables
-    _widgetOptions = <Widget>[
-      // Index 0: Home Content (Timetable)
-      VerticalTimeline(assignments: _submittedSchedule, totalHours: _totalHours),
-      
-      // Index 1: Profile Screen Content
-      ProfileScreen(
-        firstName: widget.firstName,
-        middleName: widget.middleName,
-        lastName: widget.lastName,
-        email: widget.email,
-        phoneNo: widget.phoneNo,
-        assignments: widget.assignments,
-        // REMOVED: onNavigateHome: () => _onItemTapped(0), 
-        // REMOVED: onLogout: _navigateToLogin, 
-      ),
-    ];
+  // Helper to get the current day's name (e.g., "Mon", "Tue")
+  String _getCurrentDayAbbreviation() {
+    // DateFormat('EEE') returns 'Sat', 'Mon', etc., matching your timetable keys.
+    return DateFormat('EEE').format(DateTime.now()); 
   }
 
-  @override
-  void didUpdateWidget(covariant HomeScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Ensure widget options are updated if parent widget data changes
-    _initializeWidgetOptions();
-  }
+  // Function to fetch the selected timetable from Firestore
+  Future<void> _fetchTimetable() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
 
-  void _calculateTotalHours(List<Assignment> schedule) {
-    const int periodDurationMinutes = 50;
-    int totalMinutes = schedule.length * periodDurationMinutes;
-    int hours = totalMinutes ~/ 60;
-    int minutes = totalMinutes % 60;
-
-    if (mounted) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
       setState(() {
-        _totalHours = '$hours hours $minutes minutes';
-        // Re-initialize widget options to update VerticalTimeline with new _totalHours
-        _initializeWidgetOptions();
+        _errorMessage = 'User not authenticated. Please log in again.';
+        _isLoading = false;
       });
-    } else {
-      _totalHours = '$hours hours $minutes minutes';
+      return;
+    }
+
+    try {
+      // 1. Fetch the faculty document using the current user's UID
+      final docRef = FirebaseFirestore.instance.collection('faculties').doc(user.uid);
+      final doc = await docRef.get();
+
+      if (doc.exists) {
+        final data = doc.data();
+        
+        if (data != null && data.containsKey('timetable')) {
+          final rawSchedule = data['timetable'] as Map<String, dynamic>;
+
+          // Safely cast and process the raw schedule map
+          final Map<String, List<Map<String, String>>> scheduleMap = {};
+          rawSchedule.forEach((day, periods) {
+            if (periods is List) {
+              scheduleMap[day] = periods.map((p) => Map<String, String>.from(p as Map)).toList();
+            }
+          });
+
+          final allAssignments = parseScheduleMap(scheduleMap);
+          
+          // 2. Filter assignments for the current day
+          final todaySchedule = allAssignments
+              .where((a) => a.day == _currentDayName)
+              .toList();
+
+          // 3. Sort by time (crucial for a timeline view)
+          todaySchedule.sort((a, b) => a.time.compareTo(b.time));
+
+          setState(() {
+            _currentDaySchedule = todaySchedule;
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _errorMessage = 'Timetable data not found for your account.';
+            _isLoading = false;
+          });
+        }
+      } else {
+        setState(() {
+          _errorMessage = 'Faculty profile not found.';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error fetching timetable: $e');
+      }
+      setState(() {
+        _errorMessage = 'Failed to load timetable. Please check your connection.';
+        _isLoading = false;
+      });
     }
   }
 
-  void _navigateToTimetable() async {
-    // The TimeTableScreen returns the selected schedule as a Map
-    final selectedScheduleMap = await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => TimeTableScreen(facultyName: _fullName),
+  // --- Helper Widget for the Timeline Item UI ---
+  Widget _buildTimelineItem(Assignment assignment, bool isLast) {
+    // Determine a color for visual appeal
+    Color periodColor = Colors.indigo.shade700; 
+    // You could customize this based on subject, time, etc.
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20.0),
+      // IntrinsicHeight ensures the timeline line stretches vertically with the card
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // --- Left Column: Time and Timeline Marker ---
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Time
+                Text(
+                  assignment.time,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // Timeline Marker (Circle)
+                Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: periodColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: periodColor.withOpacity(0.5),
+                        blurRadius: 3,
+                      ),
+                    ],
+                  ),
+                ),
+                // Vertical Line (The timeline connecting the markers)
+                Expanded(
+                  child: Visibility(
+                    visible: !isLast, // Hide the line for the last item
+                    child: Container(
+                      width: 2,
+                      margin: const EdgeInsets.only(left: 7.0),
+                      color: Colors.grey.shade400,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 15),
+
+            // --- Right Column: Class Details Card ---
+            Expanded(
+              child: Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(16.0),
+                  // Left border accent for visual hierarchy
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(color: periodColor, width: 5),
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.white,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Subject/Course Name
+                      Text(
+                        assignment.subject.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: periodColor,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // Section/Division
+                      Text(
+                        'Section: ${assignment.section}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Faculty Code (or Name)
+                      Row(
+                        children: [
+                          Icon(Icons.person_outline, size: 16, color: Colors.indigo.shade400),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Faculty Code: ${assignment.facultyCode.isNotEmpty ? assignment.facultyCode : 'Self'}',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
 
-    // Check if data was returned and if it's the correct type
-    if (selectedScheduleMap != null && selectedScheduleMap is Map<String, List<Map<String, String>>>) {
-      final newSchedule = parseScheduleMap(selectedScheduleMap);
-      
-      // Update state, calculate hours, and re-initialize widget options
-      setState(() {
-        _submittedSchedule = newSchedule;
-        // _calculateTotalHours will call setState and _initializeWidgetOptions internally
-        _calculateTotalHours(_submittedSchedule);
-      });
+  // --- Main Content: The Home View ---
+  Widget _buildHomeContent(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF1A237E)));
+    }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Timetable has been updated successfully!')),
+    if (_errorMessage.isNotEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 50, color: Colors.red),
+              const SizedBox(height: 10),
+              Text(
+                'Error: $_errorMessage',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, color: Colors.red),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Try Again'),
+                onPressed: _fetchTimetable,
+              ),
+            ],
+          ),
+        ),
       );
     }
+
+    // --- TimeTable Display ---
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Greeting and Current Day Header
+          Text(
+            'Hello, ${widget.facultyName}!',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.indigo.shade900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Today is $_currentDayName. Your Schedule:',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: Colors.black54,
+            ),
+          ),
+          const Divider(height: 30, thickness: 1),
+
+          // Timeline Content
+          Expanded(
+            child: _currentDaySchedule.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.check_circle_outline, size: 60, color: Colors.green),
+                        SizedBox(height: 10),
+                        Text(
+                          '🎉 Free! No classes scheduled for today.',
+                          style: TextStyle(fontSize: 18, color: Colors.green),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _currentDaySchedule.length,
+                    itemBuilder: (context, index) {
+                      final assignment = _currentDaySchedule[index];
+                      // Check if it's the last item to hide the vertical line
+                      final isLast = index == _currentDaySchedule.length - 1; 
+                      return _buildTimelineItem(assignment, isLast);
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
   }
 
-  // Method to handle switching tabs for internal navigation (e.g., Profile)
+  // --- Navigation Handlers ---
+
+  // Navigates to the TimetableScreen (passing the current faculty name)
+  void _navigateToTimetable() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => TimeTableScreen(
+          facultyName: widget.facultyName,
+        ),
+      ),
+    );
+  }
+
+  // Switches the content view (Home or Profile)
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
   }
-  
-  // Helper widget for the custom bottom navigation items
+
+  // Helper for the Bottom Navigation Bar Items
   Widget _buildBottomNavItem({
     required IconData icon,
     required String label,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    final color = isSelected ? Colors.indigo : Colors.grey.shade600;
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 26),
-            Text(label, style: TextStyle(color: color, fontSize: 12)),
+          children: <Widget>[
+            Icon(
+              icon,
+              color: isSelected ? Colors.indigo.shade800 : Colors.grey.shade600,
+              size: 28,
+            ),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: isSelected ? Colors.indigo.shade800 : Colors.grey.shade600,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
           ],
         ),
       ),
@@ -357,34 +417,31 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Determine the content based on the selected index
+    final List<Widget> _widgetOptions = <Widget>[
+      _buildHomeContent(context), // Index 0: Home (Timetable)
+      ProfileScreen( // Index 1: Profile
+        // Note: The ProfileScreen requires real user data, 
+        // which should ideally be passed from the login/fetched here. 
+        // For now, using placeholders/data from the Home constructor for continuity.
+        firstName: widget.facultyName.split(' ').first,
+        lastName: widget.facultyName.split(' ').last,
+        email: FirebaseAuth.instance.currentUser?.email ?? 'loading@example.com',
+        phoneNo: 'N/A', // Placeholder
+        assignments: const [], // Placeholder: Needs to be fetched if required
+      ),
+    ];
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Welcome, ${widget.firstName}'),
+        title: const Text('Faculty Portal'),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
-        // Left corner icon: Search
-        leading: const Padding(
-          padding: EdgeInsets.only(left: 8.0),
-          child: Icon(Icons.search, color: Colors.white, size: 28),
-        ),
-        actions: const [
-          // Right corner icon: Bell/Notification
-          IconButton(
-            icon: Icon(Icons.notifications),
-            onPressed: null, // Placeholder action
-            tooltip: 'Notifications',
-          ),
-        ],
+        automaticallyImplyLeading: false, // Prevents back button to login/register
       ),
       
-      // Displays the selected widget from _widgetOptions list
-      body: Center(
-        child: _widgetOptions.elementAt(_selectedIndex), 
-      ),
-      
-      // FloatingActionButton is removed as per the new bottom nav structure
-      floatingActionButton: null,
-      
+      body: _widgetOptions.elementAt(_selectedIndex),
+
       // Custom Bottom Bar (Timetable, Home, Profile)
       bottomNavigationBar: BottomAppBar(
         color: Colors.white,
@@ -396,7 +453,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildBottomNavItem(
               icon: Icons.calendar_month, // Using a clear calendar icon
               label: 'Timetable',
-              isSelected: false, // Not part of the internal selection
+              isSelected: false, 
               onTap: _navigateToTimetable,
             ),
             
@@ -404,9 +461,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildBottomNavItem(
               icon: Icons.home,
               label: 'Home', 
-              // Highlight the Home icon if currently on the Home content tab
               isSelected: _selectedIndex == 0,
-              // Switches to the Home view internally
               onTap: () => _onItemTapped(0), 
             ),
             
@@ -415,7 +470,7 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icons.person,
               label: 'Profile',
               isSelected: _selectedIndex == 1,
-              onTap: () => _onItemTapped(1), // Switches to the Profile content tab
+              onTap: () => _onItemTapped(1), 
             ),
           ],
         ),
