@@ -7,7 +7,7 @@ import 'package:pooja/screens/admin_dashboad.dart';
 import 'register_screen.dart';
 import 'package:pooja/screens/profile_screen.dart';
 import 'package:pooja/screens/timetable_screen.dart';
-import 'package:pooja/screens/home_screen.dart'; // CHANGE 1: ADD HOME SCREEN IMPORT
+import 'package:pooja/screens/home_screen.dart';
 import 'waiting_screen.dart'; // For Pending status
 
 enum UserRole { faculty, admin }
@@ -33,7 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
     'pavi@kongu.edu': '987654',
   };
 
-  // --- Login Logic ---
+  // --- Login Logic (Unchanged) ---
   Future<void> _loginUser() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -108,7 +108,6 @@ class _LoginScreenState extends State<LoginScreen> {
           );
 
           if (context.mounted) {
-            // CHANGE 2: NAVIGATE TO HOME SCREEN
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => HomeScreen(
@@ -198,39 +197,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              // --- Role Selection ---
+              // --- Role Selection (MODIFIED to match image) ---
               const Text(
                 'Select Role:',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Expanded(
-                    child: RadioListTile<UserRole>(
-                      title: const Text('Faculty'),
-                      value: UserRole.faculty,
-                      groupValue: _selectedRole,
-                      onChanged: (UserRole? value) {
-                        setState(() {
-                          _selectedRole = value!;
-                        });
-                      },
-                    ),
-                  ),
-                  Expanded(
-                    child: RadioListTile<UserRole>(
-                      title: const Text('Admin'),
-                      value: UserRole.admin,
-                      groupValue: _selectedRole,
-                      onChanged: (UserRole? value) {
-                        setState(() {
-                          _selectedRole = value!;
-                        });
-                      },
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 10),
+              
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100, // Light background for the entire control
+                  borderRadius: BorderRadius.circular(10.0), // Rounded corners for the whole container
+                  // Removed border, as the image implies no outer border
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: <Widget>[
+                    _buildRoleSegment(context, UserRole.faculty, 'Faculty'),
+                    _buildRoleSegment(context, UserRole.admin, 'Admin'),
+                  ],
+                ),
               ),
               const SizedBox(height: 20),
 
@@ -311,6 +297,53 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // New helper widget for the segmented control style
+  Widget _buildRoleSegment(BuildContext context, UserRole role, String text) {
+    final bool isSelected = _selectedRole == role;
+    final Color selectedColor = Colors.indigo.shade700; // A slightly darker blue for selection
+
+    BorderRadius segmentBorderRadius;
+    if (role == UserRole.faculty) {
+      segmentBorderRadius = const BorderRadius.only(
+        topLeft: Radius.circular(8.0),
+        bottomLeft: Radius.circular(8.0),
+      );
+    } else {
+      segmentBorderRadius = const BorderRadius.only(
+        topRight: Radius.circular(8.0),
+        bottomRight: Radius.circular(8.0),
+      );
+    }
+    
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedRole = role;
+          });
+        },
+        child: AnimatedContainer( // Use AnimatedContainer for smooth transitions
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          decoration: BoxDecoration(
+            color: isSelected ? selectedColor : Colors.transparent,
+            borderRadius: segmentBorderRadius, // Apply specific rounded corners
+          ),
+          child: Center(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.black87,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 16,
+              ),
+            ),
           ),
         ),
       ),

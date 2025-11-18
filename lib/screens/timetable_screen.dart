@@ -17,7 +17,7 @@ final FirebaseAuth _auth = FirebaseAuth.instance;
 const Map<String, Map<String, dynamic>> timetableData = {
   'A': {
     'section': 'I MCA - A',
-    'advisor': 'Dr.K.Chitra & Ms.P.Dharanisti',
+    'advisor': 'Dr.K.Chitra & Ms.P.Dharanisri',
     'schedule': {
       'Mon': [
         {'time': '8.45-9.35', 'subject': 'SE', 'faculty': ''},
