@@ -1,6 +1,5 @@
 // lib/screens/login_screen.dart
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,7 +8,7 @@ import 'register_screen.dart';
 import 'package:pooja/screens/profile_screen.dart';
 import 'package:pooja/screens/timetable_screen.dart';
 import 'package:pooja/screens/home_screen.dart';
-import 'waiting_screen.dart'; // For Pending status
+import 'waiting_screen.dart';
 
 enum UserRole { faculty, admin }
 
@@ -20,21 +19,36 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  UserRole _selectedRole = UserRole.faculty; // Default: Faculty
+  UserRole _selectedRole = UserRole.faculty;
   bool _isLoading = false;
+  bool _obscurePassword = true;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
-  // Hardcoded Admin Credentials
   final Map<String, String> _adminCredentials = {
     'vaishnavi@kongu.edu': '123456',
     'pavi@kongu.edu': '987654',
   };
 
-  // --- Login Logic (Unchanged) ---
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
+    );
+    _animationController.forward();
+  }
+
+  // --- Login Logic ---
   Future<void> _loginUser() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -44,282 +58,648 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    final String email = _emailController.text.trim();
-    final String password = _passwordController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
 
     try {
       if (_selectedRole == UserRole.admin) {
-        // --- Admin Login ---
         if (_adminCredentials.containsKey(email) && _adminCredentials[email] == password) {
-          // Admin login is successful (simulated)
-          if (mounted) {
-            Navigator.of(context).pushAndRemoveUntil(
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text('Admin Login Successful!'),
+                ],
+              ),
+              backgroundColor: Color(0xFF66BB6A),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+
+          if (context.mounted) {
+            Navigator.of(context).pushReplacement(
               MaterialPageRoute(builder: (context) => const AdminDashboard()),
-              (Route<dynamic> route) => false,
             );
           }
         } else {
-          // Show error for admin
-          _showSnackBar('Invalid Admin Credentials.', Colors.red);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text('Admin Login Failed: Invalid Credentials.'),
+                ],
+              ),
+              backgroundColor: Color(0xFFEF5350),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
         }
       } else {
-        // --- Faculty Login (Firebase Auth) ---
-        final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: password,
         );
+        final uid = userCredential.user!.uid;
 
-        final user = userCredential.user;
-        if (user != null) {
-          final docRef = FirebaseFirestore.instance.collection('faculties').doc(user.uid);
-          final userDoc = await docRef.get();
+        DocumentSnapshot facultyDoc = await FirebaseFirestore.instance.collection('faculty').doc(uid).get();
 
-          if (userDoc.exists) {
-            final userData = userDoc.data()!;
-            final String status = userData['status'] ?? 'Pending';
-            final String firstName = userData['firstName'] ?? 'Faculty';
-            final String lastName = userData['lastName'] ?? '';
-            final String facultyName = '$firstName $lastName'.trim();
+        if (!facultyDoc.exists) {
+          await FirebaseAuth.instance.signOut();
+          throw Exception('Faculty data not found. Please contact admin.');
+        }
 
-            if (status == 'Approved') {
-              // --- Approved Faculty: Navigate to HomeScreen (Updated to pass name) ---
-              if (mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    // PASS THE FACULTY NAME HERE
-                    builder: (context) => HomeScreen(facultyName: facultyName),
-                  ),
-                  (Route<dynamic> route) => false,
-                );
-              }
-            } else if (status == 'Pending') {
-              // --- Pending Faculty: Navigate to WaitingScreen ---
-              if (mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (context) => WaitingScreen(
-                      facultyName: facultyName,
-                      facultyUid: user.uid,
-                    ),
-                  ),
-                  (Route<dynamic> route) => false,
-                );
-              }
-            } else if (status == 'Rejected') {
-              // Rejected faculty should not be allowed to log in (or show a message)
-              _showSnackBar('Your registration was rejected. Please contact the admin.', Colors.red);
-              await FirebaseAuth.instance.signOut(); // Sign out the rejected user
-            }
-          } else {
-            // User exists in Auth but not in Firestore (data issue)
-            _showSnackBar('User data not found. Please re-register or contact admin.', Colors.red);
-            await FirebaseAuth.instance.signOut();
+        final data = facultyDoc.data() as Map<String, dynamic>;
+        final status = data['status'];
+
+        final facultyFirstName = data['firstName'] as String? ?? '';
+        final facultyMiddleName = data['middleName'] as String? ?? '';
+        final facultyLastName = data['lastName'] as String? ?? '';
+        final facultyEmail = data['email'] as String? ?? '';
+        final facultyPhone = data['phoneNo'] as String? ?? '';
+
+        final List<dynamic> teachingAssignmentsMap = data['teachingAssignments'] as List<dynamic>? ?? [];
+        final List<String> assignments = teachingAssignmentsMap.map((assignmentMap) {
+          final aClass = assignmentMap['class'] ?? 'N/A';
+          final aDivision = assignmentMap['division'] ?? 'N/A';
+          final aSubject = assignmentMap['subject'] ?? 'N/A';
+          return '$aClass - $aDivision - $aSubject';
+        }).toList();
+
+        if (status == 'Approved') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text('Faculty Login Successful!'),
+                ],
+              ),
+              backgroundColor: Color(0xFF66BB6A),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+
+          if (context.mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => HomeScreen(
+                  firstName: facultyFirstName,
+                  middleName: facultyMiddleName,
+                  lastName: facultyLastName,
+                  email: facultyEmail,
+                  phoneNo: facultyPhone,
+                  assignments: assignments,
+                ),
+              ),
+            );
           }
+        } else if (status == 'Pending') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.hourglass_empty, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text('Approval is still pending. Please wait.'),
+                ],
+              ),
+              backgroundColor: Color(0xFFFFA726),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+
+          if (context.mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => WaitingScreen(
+                  facultyName: '$facultyFirstName $facultyLastName',
+                  facultyUid: uid,
+                ),
+              ),
+            );
+          }
+        } else if (status == 'Rejected') {
+          await FirebaseAuth.instance.signOut();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.cancel, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text('Account rejected by admin. Contact support.'),
+                ],
+              ),
+              backgroundColor: Color(0xFFEF5350),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
         }
       }
     } on FirebaseAuthException catch (e) {
-      String message;
-      if (e.code == 'user-not-found' || e.code == 'wrong-password') {
-        message = 'Invalid email or password.';
-      } else {
-        message = 'Login failed: ${e.message}';
+      String message = 'Login failed. Check your email and password.';
+      if (e.code == 'user-not-found') {
+        message = 'No faculty found with that email.';
+      } else if (e.code == 'wrong-password') {
+        message = 'Incorrect password.';
       }
-      _showSnackBar(message, Colors.red);
-    } catch (e) {
-      _showSnackBar('An unexpected error occurred.', Colors.red);
-      if (kDebugMode) {
-        print(e);
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  // --- Utility Functions ---
-
-  void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  // --- Role Selector Widget (Unchanged) ---
-  Widget _buildRoleSegment(UserRole role, String text) {
-    final bool isSelected = _selectedRole == role;
-    final Color selectedColor = Colors.indigo.shade700; // A slightly darker blue for selection
-
-    BorderRadius segmentBorderRadius;
-    if (role == UserRole.faculty) {
-      segmentBorderRadius = const BorderRadius.only(
-        topLeft: Radius.circular(8.0),
-        bottomLeft: Radius.circular(8.0),
-      );
-    } else {
-      segmentBorderRadius = const BorderRadius.only(
-        topRight: Radius.circular(8.0),
-        bottomRight: Radius.circular(8.0),
-      );
-    }
-    
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedRole = role;
-          });
-        },
-        child: AnimatedContainer( // Use AnimatedContainer for smooth transitions
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12.0),
-          decoration: BoxDecoration(
-            color: isSelected ? selectedColor : Colors.transparent,
-            borderRadius: segmentBorderRadius, // Apply specific rounded corners
-            border: Border.all(color: selectedColor), // Add border to the whole segment
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text(message)),
+            ],
           ),
-          child: Center(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.black87,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                fontSize: 16,
-              ),
-            ),
-          ),
+          backgroundColor: Color(0xFFEF5350),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text('An unexpected error occurred: $e')),
+            ],
+          ),
+          backgroundColor: Color(0xFFEF5350),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
-  // --- Build Method (Unchanged) ---
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    // ... (rest of the build method is unchanged)
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = _selectedRole == UserRole.admin ? Color(0xFFEF5350) : Color(0xFF2a5298);
+    final secondaryColor = _selectedRole == UserRole.admin ? Color(0xFFE53935) : Color(0xFF1e3c72);
+    
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Faculty/Admin Login'),
-        backgroundColor: Colors.indigo,
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                // --- Title/Logo ---
-                Text(
-                  'Welcome Back!',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.indigo.shade800,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Sign in to access your portal.',
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
-                ),
-                const SizedBox(height: 30),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: _selectedRole == UserRole.admin
+                ? [Color(0xFFFFEBEE), Color(0xFFFFCDD2), Color(0xFFFFFFFF)]
+                : [Color(0xFFE3F2FD), Color(0xFFBBDEFB), Color(0xFFFFFFFF)],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      // --- Logo & Title Section ---
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [primaryColor, secondaryColor],
+                          ),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: primaryColor.withOpacity(0.4),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Image.asset(
+                          'assets/login_logo.gif',
+                          height: 70,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      ShaderMask(
+                        shaderCallback: (bounds) => LinearGradient(
+                          colors: [primaryColor, secondaryColor],
+                        ).createShader(bounds),
+                        child: const Text(
+                          'KEC Portal',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Welcome back! Please login to continue',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
 
-                // --- Role Selector ---
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8.0),
-                    border: Border.all(color: Colors.indigo.shade700),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildRoleSegment(UserRole.faculty, 'Faculty'),
-                      _buildRoleSegment(UserRole.admin, 'Admin'),
+                      // --- Role Selection Card ---
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: primaryColor.withOpacity(0.15),
+                              blurRadius: 15,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [primaryColor, secondaryColor],
+                                ),
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(18),
+                                  topRight: Radius.circular(18),
+                                ),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.person_outline, color: Colors.white, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Select Your Role',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedRole = UserRole.faculty;
+                                        });
+                                      },
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        decoration: BoxDecoration(
+                                          gradient: _selectedRole == UserRole.faculty
+                                              ? LinearGradient(
+                                                  colors: [Color(0xFF2a5298).withOpacity(0.15), Color(0xFF1e3c72).withOpacity(0.1)],
+                                                )
+                                              : null,
+                                          color: _selectedRole == UserRole.faculty ? null : Colors.grey.shade50,
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(
+                                            color: _selectedRole == UserRole.faculty
+                                                ? Color(0xFF2a5298)
+                                                : Colors.grey.shade300,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Icon(
+                                              Icons.school_outlined,
+                                              color: _selectedRole == UserRole.faculty
+                                                  ? Color(0xFF2a5298)
+                                                  : Colors.grey.shade400,
+                                              size: 32,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'Faculty',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                                color: _selectedRole == UserRole.faculty
+                                                    ? Color(0xFF2a5298)
+                                                    : Colors.grey.shade600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: InkWell(
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedRole = UserRole.admin;
+                                        });
+                                      },
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        decoration: BoxDecoration(
+                                          gradient: _selectedRole == UserRole.admin
+                                              ? LinearGradient(
+                                                  colors: [Color(0xFFEF5350).withOpacity(0.15), Color(0xFFE53935).withOpacity(0.1)],
+                                                )
+                                              : null,
+                                          color: _selectedRole == UserRole.admin ? null : Colors.grey.shade50,
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(
+                                            color: _selectedRole == UserRole.admin
+                                                ? Color(0xFFEF5350)
+                                                : Colors.grey.shade300,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Icon(
+                                              Icons.admin_panel_settings_outlined,
+                                              color: _selectedRole == UserRole.admin
+                                                  ? Color(0xFFEF5350)
+                                                  : Colors.grey.shade400,
+                                              size: 32,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'Admin',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                                color: _selectedRole == UserRole.admin
+                                                    ? Color(0xFFEF5350)
+                                                    : Colors.grey.shade600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // --- Email Field ---
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: primaryColor.withOpacity(0.3), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: primaryColor.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(fontSize: 14),
+                          decoration: InputDecoration(
+                            labelText: 'Kongu Email ID',
+                            labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                            prefixIcon: Icon(Icons.email_outlined, color: primaryColor, size: 20),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter your email address';
+                            }
+                            if (!value.endsWith('@kongu.edu')) {
+                              return 'Email must end with @kongu.edu';
+                            }
+                            if (_selectedRole == UserRole.admin && !_adminCredentials.containsKey(value.trim())) {
+                              return 'This email is not authorized for Admin login.';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // --- Password Field ---
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: primaryColor.withOpacity(0.3), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: primaryColor.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          style: const TextStyle(fontSize: 14),
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                            prefixIcon: Icon(Icons.lock_outlined, color: primaryColor, size: 20),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                color: Colors.grey.shade600,
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter your password';
+                            }
+                            if (value.length < 6) {
+                              return 'Password must be at least 6 characters';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+
+                      // --- Login Button ---
+                      _isLoading
+                          ? Container(
+                              height: 54,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [primaryColor.withOpacity(0.7), secondaryColor.withOpacity(0.7)],
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  strokeWidth: 3,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [primaryColor, secondaryColor],
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: primaryColor.withOpacity(0.4),
+                                    blurRadius: 15,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: _loginUser,
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Container(
+                                    height: 54,
+                                    alignment: Alignment.center,
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          _selectedRole == UserRole.admin ? 'ADMIN LOGIN' : 'FACULTY LOGIN',
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            letterSpacing: 1.2,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Icon(Icons.arrow_forward, color: Colors.white, size: 20),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                      const SizedBox(height: 20),
+
+                      // --- Registration Link ---
+                      if (_selectedRole == UserRole.faculty)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: primaryColor.withOpacity(0.3), width: 1.5),
+                          ),
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const RegisterScreen(),
+                                ),
+                              );
+                            },
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  'New Faculty? ',
+                                  style: TextStyle(color: Colors.grey, fontSize: 14),
+                                ),
+                                Text(
+                                  'Register Here',
+                                  style: TextStyle(
+                                    color: primaryColor,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(Icons.arrow_forward, color: primaryColor, size: 16),
+                              ],
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
-                const SizedBox(height: 30),
-
-                // --- Email Field ---
-                TextFormField(
-                  controller: _emailController,
-                  decoration: InputDecoration(
-                    labelText: 'Email Address',
-                    prefixIcon: const Icon(Icons.email),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null || value.isEmpty || !value.contains('@')) {
-                      return 'Please enter a valid email address.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // --- Password Field ---
-                TextFormField(
-                  controller: _passwordController,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  obscureText: true,
-                  validator: (value) {
-                    if (value == null || value.length < 6) {
-                      return 'Password must be at least 6 characters.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 30),
-
-                // --- Login Button ---
-                _isLoading
-                    ? const CircularProgressIndicator()
-                    : ElevatedButton(
-                        onPressed: _loginUser,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo.shade600,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          elevation: 5,
-                        ),
-                        child: const Text(
-                          'LOGIN',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                const SizedBox(height: 30),
-
-                // --- Register Link ---
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => const RegisterScreen()),
-                    );
-                  },
-                  child: Text(
-                    "Don't have an account? Register Here",
-                    style: TextStyle(color: Colors.indigo.shade600, decoration: TextDecoration.underline),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),

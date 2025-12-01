@@ -3,9 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// Removed: import 'package:file_picker/file_picker.dart';
-// Removed: import 'package:firebase_storage/firebase_storage.dart';
-import 'waiting_screen.dart'; // Assuming this file exists for success navigation
+import 'waiting_screen.dart';
 
 // --- Model for Teaching Assignment ---
 class TeachingAssignment {
@@ -13,13 +11,10 @@ class TeachingAssignment {
   String? selectedDivision;
   String? selectedSubject;
 
-  // Constructor
   TeachingAssignment({this.selectedClass, this.selectedDivision, this.selectedSubject});
 
-  // A method to check if the assignment is complete (all fields selected)
   bool get isValid => selectedClass != null && selectedDivision != null && selectedSubject != null;
 
-  // Method to convert to a map for Firestore storage
   Map<String, dynamic> toMap() {
     return {
       'class': selectedClass,
@@ -28,7 +23,6 @@ class TeachingAssignment {
     };
   }
 }
-// ----------------------------------------
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key}); 
@@ -41,9 +35,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
-  // Removed: final _storage = FirebaseStorage.instance;
   
-  // Controllers for all fields
   final _firstNameController = TextEditingController();
   final _middleNameController = TextEditingController();
   final _lastNameController = TextEditingController();
@@ -51,15 +43,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  // Dropdown State 
-  List<TeachingAssignment> _assignments = [TeachingAssignment()]; // Start with one assignment
-
-  // Removed File Upload State
-  // Removed: PlatformFile? _signatureFile;
-  // Removed: PlatformFile? _photoFile;
+  List<TeachingAssignment> _assignments = [TeachingAssignment()];
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
-  // Conditional data for dropdowns
   final List<String> _classOptions = ['I MCA', 'II MCA'];
   final Map<String, List<String>> _divisionOptions = {
     'I MCA': ['I-A', 'I-B'],
@@ -69,8 +56,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     'I MCA': ['C', 'SE', 'DSA', 'DBT', 'AM'],
     'II MCA': ['Linux', 'FSD', 'ML', 'AI', 'Python'],
   };
-
-  // --- Utility Functions ---
 
   void _addAssignment() {
     setState(() {
@@ -84,30 +69,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
   }
 
-  // Removed: _pickFile function
-  // Removed: _uploadFile function
-  
-  // --- Main Submission Logic (Updated) ---
-
   Future<void> _registerFaculty() async {
     if (_formKey.currentState!.validate()) {
       
-      // Validation for assignments list
       if (_assignments.isEmpty || !_assignments.every((a) => a.isValid)) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please complete all class, division, and subject selections, or remove incomplete entries.')),
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text('Please complete all assignments or remove incomplete entries.')),
+              ],
+            ),
+            backgroundColor: Color(0xFFFF7043),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
         );
         return;
       }
-      
-      // Removed: File upload validation
       
       setState(() {
         _isLoading = true;
       });
 
       try {
-        // 1. Create User in Firebase Authentication
         UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
@@ -115,12 +103,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         String uid = userCredential.user!.uid;
         String fullName = '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}';
 
-        // Removed: File upload to Firebase Storage (signatureUrl, photoUrl variables removed)
-        
-        // Prepare assignments for Firestore
         final assignmentsList = _assignments.map((a) => a.toMap()).toList();
         
-        // 2. Save User Data to Firestore (Updated to use empty strings for URLs)
         await _firestore.collection('faculty').doc(uid).set({
           'uid': uid,
           'firstName': _firstNameController.text.trim(),
@@ -129,24 +113,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'email': _emailController.text.trim(),
           'phoneNo': _phoneController.text.trim(),
           'teachingAssignments': assignmentsList, 
-          'signatureUrl': '', // Using empty string as placeholder
-          'photoUrl': '',      // Using empty string as placeholder
+          'signatureUrl': '',
+          'photoUrl': '',
           'registrationDate': FieldValue.serverTimestamp(),
           'status': 'Pending', 
         });
 
-        // Success: Navigate to the Waiting Screen
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Registration Successful! Redirecting for approval.')),
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Registration Successful!'),
+              ],
+            ),
+            backgroundColor: Color(0xFF66BB6A),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
         );
 
-        // NEW code in register_screen.dart
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            // Pass the generated UID to the WaitingScreen
             builder: (context) => WaitingScreen(
               facultyName: fullName,
-              facultyUid: uid, // <-- Pass the UID here
+              facultyUid: uid,
             ),
           ),
         );
@@ -154,12 +147,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
       } on FirebaseAuthException catch (e) {
         String message = 'Registration failed. ${e.message}';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text(message)),
+              ],
+            ),
+            backgroundColor: Color(0xFFEF5350),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
         );
       } catch (e) {
-        // Catch all other errors 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('An unexpected error occurred: $e')),
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('An unexpected error occurred: $e')),
+              ],
+            ),
+            backgroundColor: Color(0xFFEF5350),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
         );
       } finally {
         setState(() {
@@ -169,96 +185,200 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  // --- Widget for Single Assignment Block (Reusable) ---
   Widget _buildAssignmentDropdowns(int index, TeachingAssignment assignment) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(15),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.indigo.shade200),
-        borderRadius: BorderRadius.circular(8),
+        gradient: LinearGradient(
+          colors: [Color(0xFFE3F2FD), Color(0xFFFFFFFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Color(0xFF2a5298).withOpacity(0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0xFF2a5298).withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Assignment ${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
-              // Remove button (only if more than one assignment exists)
-              if (_assignments.length > 1)
-                IconButton(
-                  icon: const Icon(Icons.close, color: Colors.red),
-                  onPressed: () => _removeAssignment(index),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // Class and Division in a Row
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: 'Select Class', border: OutlineInputBorder()),
-                  value: assignment.selectedClass,
-                  items: _classOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      assignment.selectedClass = newValue;
-                      assignment.selectedDivision = null; // Reset division when class changes
-                      assignment.selectedSubject = null; // Reset subject when class changes
-                    });
-                  },
-                  validator: (value) => value == null ? 'Select a class' : null,
-                ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF1e3c72), Color(0xFF2a5298)],
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: 'Select Division', border: OutlineInputBorder()),
-                  value: assignment.selectedDivision,
-                  items: assignment.selectedClass != null && _divisionOptions.containsKey(assignment.selectedClass!)
-                      ? _divisionOptions[assignment.selectedClass!]!
-                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                          .toList()
-                      : [],
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      assignment.selectedDivision = newValue;
-                    });
-                  },
-                  validator: (value) => value == null ? 'Select a division' : null,
-                ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(14),
+                topRight: Radius.circular(14),
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // Subject Dropdown (Conditional - Full Width)
-          if (assignment.selectedClass != null)
-            DropdownButtonFormField<String>(
-              decoration: const InputDecoration(labelText: 'Select Subject', border: OutlineInputBorder()),
-              value: assignment.selectedSubject,
-              items: assignment.selectedClass != null && _subjectOptions.containsKey(assignment.selectedClass!)
-                  ? _subjectOptions[assignment.selectedClass!]!
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                      .toList()
-                  : [],
-              onChanged: (String? newValue) {
-                setState(() {
-                  assignment.selectedSubject = newValue;
-                });
-              },
-              validator: (value) => value == null ? 'Select a subject' : null,
             ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.assignment, color: Colors.white, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Assignment ${index + 1}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+                if (_assignments.length > 1)
+                  InkWell(
+                    onTap: () => _removeAssignment(index),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.close, color: Colors.white, size: 18),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        decoration: InputDecoration(
+                          labelText: 'Class',
+                          prefixIcon: Icon(Icons.class_, color: Color(0xFF2a5298), size: 20),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Color(0xFF2a5298).withOpacity(0.3)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Color(0xFF2a5298).withOpacity(0.3)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Color(0xFF2a5298), width: 2),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        ),
+                        value: assignment.selectedClass,
+                        items: _classOptions.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14)))).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            assignment.selectedClass = newValue;
+                            assignment.selectedDivision = null;
+                            assignment.selectedSubject = null;
+                          });
+                        },
+                        validator: (value) => value == null ? 'Select a class' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        decoration: InputDecoration(
+                          labelText: 'Division',
+                          prefixIcon: Icon(Icons.group, color: Color(0xFF2a5298), size: 20),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Color(0xFF2a5298).withOpacity(0.3)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Color(0xFF2a5298).withOpacity(0.3)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Color(0xFF2a5298), width: 2),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        ),
+                        value: assignment.selectedDivision,
+                        items: assignment.selectedClass != null && _divisionOptions.containsKey(assignment.selectedClass!)
+                            ? _divisionOptions[assignment.selectedClass!]!
+                                .map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14))))
+                                .toList()
+                            : [],
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            assignment.selectedDivision = newValue;
+                          });
+                        },
+                        validator: (value) => value == null ? 'Select division' : null,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                if (assignment.selectedClass != null)
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Subject',
+                      prefixIcon: Icon(Icons.book, color: Color(0xFF2a5298), size: 20),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Color(0xFF2a5298).withOpacity(0.3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Color(0xFF2a5298).withOpacity(0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Color(0xFF2a5298), width: 2),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    ),
+                    value: assignment.selectedSubject,
+                    items: assignment.selectedClass != null && _subjectOptions.containsKey(assignment.selectedClass!)
+                        ? _subjectOptions[assignment.selectedClass!]!
+                            .map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14))))
+                            .toList()
+                        : [],
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        assignment.selectedSubject = newValue;
+                      });
+                    },
+                    validator: (value) => value == null ? 'Select subject' : null,
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
-
-  // --- Widget Build (Updated) ---
 
   @override
   void dispose() {
@@ -274,133 +394,392 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Faculty Registration'),
-        backgroundColor: Colors.indigo,
-        automaticallyImplyLeading: true, // Show back button
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Form(
-          key: _formKey,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF1e3c72),
+              Color(0xFF2a5298),
+              Color(0xFF7474BF),
+            ],
+          ),
+        ),
+        child: SafeArea(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              // --- 1. Personal Details ---
-              const Text('Personal Details', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const Divider(),
-              
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _firstNameController,
-                      decoration: const InputDecoration(labelText: 'First Name', prefixIcon: Icon(Icons.person)),
-                      validator: (value) => value == null || value.isEmpty ? 'Enter first name' : null,
-                    ),
+            children: [
+              // Custom App Bar
+              Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.white.withOpacity(0.25), Colors.white.withOpacity(0.15)],
                   ),
-                  const SizedBox(width: 15), 
-                  Expanded(
-                    child: TextFormField(
-                      controller: _lastNameController,
-                      decoration: const InputDecoration(labelText: 'Last Name', prefixIcon: Icon(Icons.person)),
-                      validator: (value) => value == null || value.isEmpty ? 'Enter last name' : null,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 15,
+                      spreadRadius: 1,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _middleNameController,
-                decoration: const InputDecoration(labelText: 'Middle Name (Optional)', prefixIcon: Icon(Icons.person_outline)),
-              ),
-              const SizedBox(height: 20), 
-
-              // --- 2. Contact & Auth Details ---
-              const Text('Contact & Authentication', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const Divider(),
-              
-              // Email Field
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'College Email ID (@kongu.edu)', prefixIcon: Icon(Icons.email)),
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Enter email address';
-                  if (!value.endsWith('@kongu.edu')) return 'Email must end with @kongu.edu';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 10),
-
-              // Password Field
-              TextFormField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Set Password (Min 6 chars)', prefixIcon: Icon(Icons.lock)),
-                validator: (value) => value == null || value.length < 6 ? 'Password must be at least 6 characters' : null,
-              ),
-              const SizedBox(height: 10),
-
-              // Phone Number Field
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Phone No (10 digits)', prefixIcon: Icon(Icons.phone)),
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Enter phone number';
-                  if (value.length != 10 || int.tryParse(value) == null) return 'Phone number must be exactly 10 digits';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              
-              // --- 3. Teaching Assignments (Class, Division, Subject) ---
-              const Text('Teaching Assignments', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const Divider(),
-
-              // Dynamically build the list of assignment dropdowns
-              ..._assignments.asMap().entries.map((entry) {
-                int idx = entry.key;
-                TeachingAssignment assignment = entry.value;
-                return _buildAssignmentDropdowns(idx, assignment);
-              }).toList(),
-              
-              // ADD Assignment Button
-              OutlinedButton.icon(
-                icon: const Icon(Icons.add),
-                label: const Text('Add Another Assignment'),
-                onPressed: _addAssignment,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  foregroundColor: Colors.indigo,
-                  side: BorderSide(color: Colors.indigo.shade300),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    InkWell(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.person_add, color: Color(0xFF1e3c72), size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Faculty Registration',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Create your account',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 30), // Increased spacing after last section
 
-              // Removed: --- 4. File Uploads (Signature and Photo) ---
-              
-              // --- Submit Button ---
-              _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : ElevatedButton(
-                      onPressed: _registerFaculty,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
+              // Form Content
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(30),
+                      topRight: Radius.circular(30),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, -5),
                       ),
-                      child: const Text(
-                        'SUBMIT REGISTRATION',
-                        style: TextStyle(fontSize: 18, color: Colors.white),
+                    ],
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          // Personal Details Section
+                          _buildSectionHeader('Personal Details', Icons.person_outline),
+                          const SizedBox(height: 16),
+                          
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: _firstNameController,
+                                  label: 'First Name',
+                                  icon: Icons.person,
+                                  validator: (value) => value == null || value.isEmpty ? 'Required' : null,
+                                ),
+                              ),
+                              const SizedBox(width: 12), 
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: _lastNameController,
+                                  label: 'Last Name',
+                                  icon: Icons.person,
+                                  validator: (value) => value == null || value.isEmpty ? 'Required' : null,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          
+                          _buildTextField(
+                            controller: _middleNameController,
+                            label: 'Middle Name (Optional)',
+                            icon: Icons.person_outline,
+                          ),
+                          const SizedBox(height: 24), 
+
+                          // Contact & Authentication Section
+                          _buildSectionHeader('Contact & Authentication', Icons.security),
+                          const SizedBox(height: 16),
+                          
+                          _buildTextField(
+                            controller: _emailController,
+                            label: 'College Email',
+                            icon: Icons.email,
+                            keyboardType: TextInputType.emailAddress,
+                            hint: 'example@kongu.edu',
+                            validator: (value) {
+                              if (value == null || value.isEmpty) return 'Required';
+                              if (!value.endsWith('@kongu.edu')) return 'Must end with @kongu.edu';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+
+                          _buildTextField(
+                            controller: _passwordController,
+                            label: 'Password',
+                            icon: Icons.lock,
+                            obscureText: _obscurePassword,
+                            hint: 'Min 6 characters',
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                color: Color(0xFF2a5298),
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                            validator: (value) => value == null || value.length < 6 ? 'Min 6 characters' : null,
+                          ),
+                          const SizedBox(height: 12),
+
+                          _buildTextField(
+                            controller: _phoneController,
+                            label: 'Phone Number',
+                            icon: Icons.phone,
+                            keyboardType: TextInputType.phone,
+                            hint: '10 digits',
+                            validator: (value) {
+                              if (value == null || value.isEmpty) return 'Required';
+                              if (value.length != 10 || int.tryParse(value) == null) return 'Must be 10 digits';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Teaching Assignments Section
+                          _buildSectionHeader('Teaching Assignments', Icons.school),
+                          const SizedBox(height: 16),
+
+                          ..._assignments.asMap().entries.map((entry) {
+                            int idx = entry.key;
+                            TeachingAssignment assignment = entry.value;
+                            return _buildAssignmentDropdowns(idx, assignment);
+                          }).toList(),
+                          
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFF1e3c72).withOpacity(0.1), Color(0xFF2a5298).withOpacity(0.1)],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Color(0xFF2a5298).withOpacity(0.3), width: 1.5),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: _addAssignment,
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.add_circle_outline, color: Color(0xFF2a5298), size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Add Another Assignment',
+                                        style: TextStyle(
+                                          color: Color(0xFF2a5298),
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+
+                          // Submit Button
+                          _isLoading
+                              ? Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [Color(0xFF1e3c72), Color(0xFF2a5298)],
+                                      ),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      strokeWidth: 3,
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [Color(0xFF66BB6A), Color(0xFF43A047)],
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Color(0xFF66BB6A).withOpacity(0.4),
+                                        blurRadius: 15,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ElevatedButton(
+                                    onPressed: _registerFaculty,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      foregroundColor: Colors.white,
+                                      shadowColor: Colors.transparent,
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                    ),
+                                    child: const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.check_circle, size: 22),
+                                        SizedBox(width: 10),
+                                        Text(
+                                          'SUBMIT REGISTRATION',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                          const SizedBox(height: 20),
+                        ],
                       ),
                     ),
-              const SizedBox(height: 20),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFE3F2FD), Color(0xFFF5F5F5)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(color: Color(0xFF2a5298), width: 4),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Color(0xFF2a5298), size: 22),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    String? hint,
+    TextInputType? keyboardType,
+    bool obscureText = false,
+    Widget? suffixIcon,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      style: const TextStyle(fontSize: 14),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon, color: Color(0xFF2a5298), size: 20),
+        suffixIcon: suffixIcon,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Color(0xFF2a5298).withOpacity(0.3)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Color(0xFF2a5298).withOpacity(0.3)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Color(0xFF2a5298), width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Color(0xFFEF5350)),
+        ),
+        filled: true,
+        fillColor: Colors.grey.shade50,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      validator: validator,
     );
   }
 }

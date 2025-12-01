@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'login_screen.dart'; // Import for navigation target
-import 'notes_screen.dart';
-import 'home_screen.dart';
+import 'login_screen.dart'; // Assuming this path is correct
+import 'notes_screen.dart'; // Assuming this path is correct
 
-class ProfileScreen extends StatelessWidget {
+// --- CONVERTED TO STATEFULWIDGET ---
+class ProfileScreen extends StatefulWidget {
   final String firstName;
   final String? middleName;
   final String lastName;
   final String email;
   final String phoneNo;
-  final List<dynamic> assignments;
-  // The onNavigateHome and onLogout properties have been removed 
-  // because the logout logic is now handled internally.
+  final List<dynamic> assignments; // Dynamic to handle map or string lists
 
   const ProfileScreen({
     super.key,
@@ -22,32 +20,81 @@ class ProfileScreen extends StatelessWidget {
     required this.email,
     required this.phoneNo,
     required this.assignments,
-    // Removed: required this.onNavigateHome,
-    // Removed: required this.onLogout,
   });
 
-  // --- NEW: Local method to handle Firebase sign out and navigation ---
-  Future<void> _logout(BuildContext context) async {
-    // 1. Show a loading indicator (optional, but good practice for async ops)
-    // You might want to use a stateful widget to manage a real loading state,
-    // but we proceed directly here for simplicity in a StatelessWidget.
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  // --- STATE VARIABLES ---
+  bool _isEditing = false;
+  late TextEditingController _fullNameController;
+  late TextEditingController _emailController;
+  late TextEditingController _phoneController;
+
+  @override
+  void initState() {
+    super.initState();
+    final middle = (widget.middleName != null && widget.middleName!.isNotEmpty) ? ' ${widget.middleName}' : '';
+    final fullName = '${widget.firstName}$middle ${widget.lastName}';
+
+    _fullNameController = TextEditingController(text: fullName);
+    _emailController = TextEditingController(text: widget.email);
+    _phoneController = TextEditingController(text: widget.phoneNo);
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+  // -----------------------
+
+  // --- Toggle Editing State and Save Logic ---
+  void _toggleEdit() {
+    setState(() {
+      _isEditing = !_isEditing;
+    });
+    if (!_isEditing) {
+      _saveDetails();
+    }
+  }
+
+  void _saveDetails() {
+    // 1. Database Update (Simulated): Send updated data to your backend
+    //    * Full Name: _fullNameController.text
+    //    * Phone: _phoneController.text
     
+    // Note on Email: Since Email is usually the primary key, changing it often requires
+    // Firebase re-authentication, hence why it's marked read-only in the UI.
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Profile details updated locally (Name: ${_fullNameController.text}, Phone: ${_phoneController.text}).',
+        ),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  // --- Logout Method ---
+  Future<void> _logout(BuildContext context) async {
     try {
-      // 2. Sign out the current user from Firebase
       await FirebaseAuth.instance.signOut();
-      
-      // 3. Navigate to LoginScreen and clear all previous routes
       if (context.mounted) {
+        // Navigate to LoginScreen and remove all previous routes
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (context) => const LoginScreen(),
           ),
-          // This predicate (route) => false ensures no routes remain on the stack.
-          (Route<dynamic> route) => false, 
+          (Route<dynamic> route) => false,
         );
       }
     } catch (e) {
-      // Handle potential sign-out error
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error signing out. Try again: $e')),
@@ -56,6 +103,7 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
+  // --- Navigation Methods ---
   void _navigateToNotes(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -64,20 +112,53 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProfileDetail(String title, String value, IconData icon) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.indigo),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
-      subtitle: Text(
-        value,
-        style: const TextStyle(fontSize: 16),
+  // --- Widget for Editable Details (TextFormField) ---
+  Widget _buildEditableDetail({
+    required String title,
+    required TextEditingController controller,
+    required IconData icon,
+    bool isEditable = true,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: Colors.indigo.shade600),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black54),
+              ),
+            ],
+          ),
+          TextFormField(
+            controller: controller,
+            readOnly: !_isEditing || !isEditable,
+            keyboardType: title == 'Phone Number' ? TextInputType.phone : TextInputType.text,
+            style: TextStyle(
+              fontSize: 18,
+              color: isEditable ? Colors.black : Colors.grey.shade700,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.only(left: 35, top: 8, bottom: 8),
+              border: InputBorder.none,
+              hintText: 'Enter $title',
+              filled: _isEditing && isEditable,
+              fillColor: isEditable ? Colors.indigo.shade50.withOpacity(0.5) : Colors.transparent,
+            ),
+          ),
+          const Divider(height: 1),
+        ],
       ),
     );
   }
 
+  // --- Widget for Assignment Tile ---
   Widget _buildAssignmentTile({
     required String className,
     required String division,
@@ -111,27 +192,41 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  // --- BUILD METHOD ---
   @override
   Widget build(BuildContext context) {
-    final middle = (middleName != null && middleName!.isNotEmpty) ? ' $middleName' : '';
-    final fullName = '$firstName$middle $lastName';
-    final displayFirstName = firstName;
+    final displayFirstName = widget.firstName;
 
+    // IMPORTANT: Since you defined an AppBar here, your HomeScreen's BottomNavigationBar
+    // logic needs to handle this. If the HomeScreen is NOT conditionally showing the 
+    // AppBar, the navigation back to Home (VerticalTimeline) might look odd. 
+    // If this is a bottom navigation tab, typically the AppBar is omitted here 
+    // and handled by the parent Scaffold, but since you added it, I'm keeping it.
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Profile'),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
+          // 1. Notes Icon
           IconButton(
             icon: const Icon(Icons.note_alt_outlined),
             onPressed: () => _navigateToNotes(context),
             tooltip: 'My Notes',
           ),
+          // 2. Edit/Save Icon (Primary Action)
+          IconButton(
+            icon: Icon(
+              _isEditing ? Icons.save : Icons.edit,
+              color: Colors.white,
+            ),
+            onPressed: _toggleEdit,
+            tooltip: _isEditing ? 'Save Changes' : 'Edit Profile',
+          ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.only(top: 20.0, left: 10.0, right: 10.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -159,49 +254,96 @@ class ProfileScreen extends StatelessWidget {
 
             const Divider(height: 30, thickness: 1),
 
-            // --- Contact Details ---
-            const Text(
-              'Contact Information',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            // --- Contact Details Header with Edit/Save Hint ---
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Contact Information',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    _isEditing ? 'Tap Save to confirm' : 'Tap Edit to modify',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: _isEditing ? Colors.green.shade700 : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 10),
 
-            _buildProfileDetail('Full Name', fullName, Icons.badge),
-            _buildProfileDetail('Email ID', email, Icons.email),
-            _buildProfileDetail('Phone Number', phoneNo, Icons.phone),
+            // --- Editable Contact Details ---
+            _buildEditableDetail(
+              title: 'Full Name',
+              controller: _fullNameController,
+              icon: Icons.badge,
+            ),
+            // Email is Read-Only
+            _buildEditableDetail(
+              title: 'Email ID',
+              controller: _emailController,
+              icon: Icons.email,
+              isEditable: false,
+            ),
+            _buildEditableDetail(
+              title: 'Phone Number',
+              controller: _phoneController,
+              icon: Icons.phone,
+            ),
 
             const Divider(height: 30, thickness: 1),
 
             // --- Teaching Assignments ---
-            const Text(
-              'Teaching Assignments',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text(
+                'Teaching Assignments',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
             ),
             const SizedBox(height: 10),
 
-            if (assignments.isEmpty)
-              const Text(
-                'No assignments currently listed.',
-                style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
-              )
-            else
-              ...assignments.map((assignment) {
-                if (assignment is Map<String, dynamic>) {
-                  return _buildAssignmentTile(
-                    className: assignment['class'] ?? 'N/A',
-                    division: assignment['division'] ?? 'N/A',
-                    subject: assignment['subject'] ?? 'N/A',
-                  );
-                } else {
-                  // Fallback for non-Map assignments
-                  final parts = assignment.toString().split(' - ');
-                  return _buildAssignmentTile(
-                    className: parts.isNotEmpty ? parts[0] : 'N/A',
-                    division: parts.length > 1 ? parts[1] : 'N/A',
-                    subject: parts.length > 2 ? parts[2] : 'N/A',
-                  );
-                }
-              }).toList(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10.0),
+              child: Column(
+                children: [
+                  if (widget.assignments.isEmpty)
+                    const Text(
+                      'No assignments currently listed.',
+                      style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
+                    )
+                  else
+                    // Map the dynamic assignments list
+                    ...widget.assignments.map((assignment) {
+                      if (assignment is Map<String, dynamic> &&
+                          assignment.containsKey('class') &&
+                          assignment.containsKey('division') &&
+                          assignment.containsKey('subject')) 
+                      {
+                        // Case 1: Assignment is a well-structured Map
+                        return _buildAssignmentTile(
+                          className: assignment['class'] ?? 'N/A',
+                          division: assignment['division'] ?? 'N/A',
+                          subject: assignment['subject'] ?? 'N/A',
+                        );
+                      } else {
+                        // Case 2: Assignment is a simple string, attempt to parse
+                        final parts = assignment.toString().split(' - ');
+                        return _buildAssignmentTile(
+                          className: parts.length > 0 ? parts[0] : 'N/A',
+                          division: parts.length > 1 ? parts[1] : 'N/A',
+                          subject: parts.length > 2 ? parts[2] : assignment.toString(),
+                        );
+                      }
+                    }).toList(),
+                ],
+              ),
+            ),
 
             // --- Logout Button (centered at bottom) ---
             const SizedBox(height: 50),
@@ -210,8 +352,7 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.logout, size: 40, color: Colors.red),
-                    // Set the onPressed to call the local asynchronous _logout method
-                    onPressed: () => _logout(context), 
+                    onPressed: () => _logout(context),
                     tooltip: 'Logout',
                   ),
                   const Text(
